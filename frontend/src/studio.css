@@ -1042,9 +1042,15 @@
 
 .switch.on i { background: var(--switch-knob-on); transform: translateX(14px); }
 
-.ins-filters { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.flt-library { display: flex; flex-direction: column; gap: 14px; }
 
-.flt { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.flt-group { display: flex; flex-direction: column; gap: 8px; }
+
+.flt-group .ins-label { margin: 0; }
+
+.ins-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 6px; }
+
+.flt { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
 
 .flt-shot {
   width: 100%;
@@ -1058,7 +1064,17 @@
 
 .flt.on .flt-shot { box-shadow: 0 0 0 2px var(--ring), 0 0 0 3.5px var(--accent); }
 
-.flt em { font-style: normal; font-size: 10.5px; color: var(--muted-2); white-space: nowrap; }
+.flt em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--muted-2);
+  line-height: 1.15;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .flt.on em { color: var(--ink); font-weight: 600; }
 

@@ -30,13 +30,77 @@ export function newTrack() {
   return { id: uid('t'), hidden: false, clips: [] }
 }
 
-export const FILTERS = [
-  { id: 'none', label: 'None', css: '' },
-  { id: 'cinematic', label: 'Cinematic', css: 'contrast(1.12) saturate(0.82) sepia(0.18) hue-rotate(-10deg)' },
-  { id: 'vivid', label: 'Vivid', css: 'saturate(1.5) contrast(1.08)' },
-  { id: 'soft', label: 'Soft', css: 'contrast(0.86) brightness(1.06) saturate(0.88)' },
-  { id: 'bw', label: 'B&W', css: 'grayscale(1) contrast(1.12)' },
+// Color grades for media clips. filterCSS turns these into canvas/CSS filters.
+export const FILTER_GROUPS = [
+  { id: 'look', label: 'Look' },
+  { id: 'tone', label: 'Tone' },
+  { id: 'tint', label: 'Tint' },
+  { id: 'film', label: 'Film' },
+  { id: 'mono', label: 'Mono' },
+  { id: 'invert', label: 'Invert' },
 ]
+
+export const FILTERS = [
+  { id: 'none', label: 'None', group: 'look', css: '' },
+  { id: 'cinematic', label: 'Cinematic', group: 'look', css: 'contrast(1.12) saturate(0.82) sepia(0.18) hue-rotate(-10deg)' },
+  { id: 'vivid', label: 'Vivid', group: 'look', css: 'saturate(1.5) contrast(1.08)' },
+  { id: 'soft', label: 'Soft', group: 'look', css: 'contrast(0.86) brightness(1.06) saturate(0.88)' },
+  { id: 'punch', label: 'Punch', group: 'look', css: 'contrast(1.38) saturate(1.18) brightness(1.02)' },
+  { id: 'fade', label: 'Fade', group: 'look', css: 'contrast(0.8) brightness(1.1) saturate(0.72)' },
+  { id: 'matte', label: 'Matte', group: 'look', css: 'contrast(0.88) saturate(0.78) brightness(1.04)' },
+  { id: 'drama', label: 'Drama', group: 'look', css: 'contrast(1.42) saturate(0.68) brightness(0.9)' },
+  { id: 'pop', label: 'Pop', group: 'look', css: 'saturate(1.85) contrast(1.18) brightness(1.06)' },
+  { id: 'pastel', label: 'Pastel', group: 'look', css: 'saturate(0.62) contrast(0.88) brightness(1.16)' },
+  { id: 'dream', label: 'Dream', group: 'look', css: 'contrast(0.84) brightness(1.14) saturate(0.78) sepia(0.1)' },
+  { id: 'crisp', label: 'Crisp', group: 'look', css: 'contrast(1.22) saturate(1.08) brightness(1.04)' },
+
+  { id: 'warm', label: 'Warm', group: 'tone', css: 'sepia(0.28) saturate(1.28) hue-rotate(-8deg) brightness(1.04)' },
+  { id: 'cool', label: 'Cool', group: 'tone', css: 'saturate(0.92) hue-rotate(16deg) brightness(1.03) contrast(1.05)' },
+  { id: 'sunset', label: 'Sunset', group: 'tone', css: 'sepia(0.38) saturate(1.45) hue-rotate(-18deg) contrast(1.08) brightness(1.06)' },
+  { id: 'golden', label: 'Golden', group: 'tone', css: 'sepia(0.32) saturate(1.5) brightness(1.1) hue-rotate(-12deg)' },
+  { id: 'amber', label: 'Amber', group: 'tone', css: 'sepia(0.48) saturate(1.65) hue-rotate(-16deg) contrast(1.1)' },
+  { id: 'rose', label: 'Rose', group: 'tone', css: 'hue-rotate(-22deg) saturate(1.4) sepia(0.14) brightness(1.05)' },
+  { id: 'arctic', label: 'Arctic', group: 'tone', css: 'saturate(0.68) hue-rotate(26deg) brightness(1.1) contrast(0.96)' },
+  { id: 'moody', label: 'Moody', group: 'tone', css: 'contrast(1.2) saturate(0.52) brightness(0.86) hue-rotate(10deg)' },
+  { id: 'night', label: 'Night', group: 'tone', css: 'brightness(0.6) contrast(1.28) saturate(0.72) hue-rotate(14deg)' },
+
+  { id: 'emerald', label: 'Emerald', group: 'tint', css: 'hue-rotate(78deg) saturate(1.35) contrast(1.06)' },
+  { id: 'ocean', label: 'Ocean', group: 'tint', css: 'hue-rotate(168deg) saturate(1.25) contrast(1.06) brightness(0.98)' },
+  { id: 'teal', label: 'Teal', group: 'tint', css: 'hue-rotate(145deg) saturate(1.15) contrast(1.08) brightness(1.02)' },
+  { id: 'violet', label: 'Violet', group: 'tint', css: 'hue-rotate(255deg) saturate(1.2) contrast(1.1)' },
+  { id: 'candy', label: 'Candy', group: 'tint', css: 'saturate(1.75) hue-rotate(-28deg) contrast(1.06) brightness(1.08)' },
+  { id: 'neon', label: 'Neon', group: 'tint', css: 'saturate(2.1) contrast(1.32) hue-rotate(18deg) brightness(1.08)' },
+  { id: 'infrared', label: 'Infrared', group: 'tint', css: 'hue-rotate(180deg) saturate(1.5) contrast(1.16) sepia(0.12)' },
+  { id: 'aurora', label: 'Aurora', group: 'tint', css: 'hue-rotate(110deg) saturate(1.6) contrast(1.12) brightness(1.04)' },
+
+  { id: 'sepia', label: 'Sepia', group: 'film', css: 'sepia(0.9) contrast(1.05) brightness(1.02)' },
+  { id: 'vintage', label: 'Vintage', group: 'film', css: 'sepia(0.42) contrast(0.88) brightness(1.1) saturate(0.68)' },
+  { id: 'faded', label: 'Faded', group: 'film', css: 'contrast(0.76) saturate(0.6) brightness(1.14) sepia(0.16)' },
+  { id: 'bleach', label: 'Bleach', group: 'film', css: 'contrast(1.28) saturate(0.48) brightness(1.12)' },
+  { id: 'lomo', label: 'Lomo', group: 'film', css: 'contrast(1.32) saturate(1.45) brightness(0.94) sepia(0.16)' },
+  { id: 'slide', label: 'Slide', group: 'film', css: 'contrast(1.18) saturate(1.4) sepia(0.16) hue-rotate(-6deg) brightness(1.02)' },
+  { id: 'cross', label: 'Cross', group: 'film', css: 'contrast(1.12) saturate(0.82) sepia(0.22) hue-rotate(18deg) brightness(1.04)' },
+  { id: 'retro', label: 'Retro', group: 'film', css: 'sepia(0.55) contrast(1.15) saturate(1.2) hue-rotate(-8deg) brightness(0.98)' },
+
+  { id: 'bw', label: 'B&W', group: 'mono', css: 'grayscale(1) contrast(1.12)' },
+  { id: 'noir', label: 'Noir', group: 'mono', css: 'grayscale(1) contrast(1.45) brightness(0.88)' },
+  { id: 'silver', label: 'Silver', group: 'mono', css: 'grayscale(1) contrast(0.9) brightness(1.14)' },
+  { id: 'ink', label: 'Ink', group: 'mono', css: 'grayscale(1) contrast(1.7) brightness(0.82)' },
+  { id: 'ash', label: 'Ash', group: 'mono', css: 'grayscale(0.85) contrast(0.95) saturate(0.3) brightness(1.05)' },
+  { id: 'graphite', label: 'Graphite', group: 'mono', css: 'grayscale(1) contrast(1.2) brightness(0.78)' },
+
+  { id: 'invert', label: 'Invert', group: 'invert', css: 'invert(1)' },
+  { id: 'negative', label: 'Negative', group: 'invert', css: 'invert(1) contrast(1.15) saturate(1.2)' },
+  { id: 'solar', label: 'Solar', group: 'invert', css: 'invert(0.72) hue-rotate(180deg) saturate(1.55) contrast(1.18)' },
+  { id: 'xray', label: 'X-ray', group: 'invert', css: 'invert(0.92) grayscale(0.35) contrast(1.35) brightness(1.18)' },
+  { id: 'ghost', label: 'Ghost', group: 'invert', css: 'invert(0.85) brightness(1.2) contrast(0.9) saturate(0.4)' },
+  { id: 'blueprint', label: 'Blueprint', group: 'invert', css: 'grayscale(1) sepia(1) hue-rotate(180deg) saturate(3) contrast(1.12) brightness(0.95)' },
+]
+
+export const FILTER_LIBRARY = FILTER_GROUPS.map((group) => ({
+  ...group,
+  filters: FILTERS.filter((filter) => filter.group === group.id),
+}))
 
 export const FONTS = [
   'Segoe UI',

@@ -1,6 +1,6 @@
 <script>
   import SourceRange from './SourceRange.svelte'
-  import { CLOCK_FIELDS, DATE_FORMATS, FILTERS, FONTS, SOURCE_KINDS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
+  import { CLOCK_FIELDS, DATE_FORMATS, FILTER_LIBRARY, FONTS, SOURCE_KINDS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
 
   let { studio, sources, assets, revision, onError } = $props()
 
@@ -324,17 +324,23 @@
               <em>{clip.adjust?.[a.key] ?? 0}</em>
             </label>
           {/each}
-          <p class="ins-label">Filters</p>
-          <div class="ins-filters">
-            {#each FILTERS as f (f.id)}
-              <button class="flt" class:on={(clip.filter || 'none') === f.id} onclick={() => set('filter', f.id)}>
-                <span class="flt-shot">
-                  {#if entry?.poster}
-                    <img src={entry.poster} alt="" style:filter={filterCSS({ ...clip, filter: f.id }, 0.25)} />
-                  {/if}
-                </span>
-                <em>{f.label}</em>
-              </button>
+          <div class="flt-library">
+            {#each FILTER_LIBRARY as group (group.id)}
+              <div class="flt-group">
+                <p class="ins-label">{group.label}</p>
+                <div class="ins-filters">
+                  {#each group.filters as f (f.id)}
+                    <button class="flt" class:on={(clip.filter || 'none') === f.id} title={f.label} onclick={() => set('filter', f.id)}>
+                      <span class="flt-shot">
+                        {#if entry?.poster}
+                          <img src={entry.poster} alt="" style:filter={filterCSS({ ...clip, filter: f.id }, 0.25)} />
+                        {/if}
+                      </span>
+                      <em>{f.label}</em>
+                    </button>
+                  {/each}
+                </div>
+              </div>
             {/each}
           </div>
         </div>
