@@ -7,7 +7,7 @@ const QUALITY = 0.92
 
 // renderFrames draws every frame at fps and streams them to the Go side as JPEGs.
 // It returns the export id to finish. Frames where nothing moves reuse the last image.
-export async function renderFrames({ project, sources, fps, api, signal, onProgress, now = new Date() }) {
+export async function renderFrames({ project, sources, fps, api, signal, onProgress, now = new Date(), values = null }) {
   const duration = projectDuration(project)
   const total = Math.max(1, Math.round(duration * fps))
   const canvas = document.createElement('canvas')
@@ -30,7 +30,7 @@ export async function renderFrames({ project, sources, fps, api, signal, onProgr
       let frame = lastFrame
       if (moving || key !== lastKey || !frame) {
         await sources.prepare(active, t)
-        drawFrame(ctx, project, sources, t, now)
+        drawFrame(ctx, project, sources, t, now, values)
         frame = canvas.toDataURL('image/jpeg', QUALITY)
       }
       lastKey = moving ? '' : key
@@ -51,7 +51,7 @@ export async function renderFrames({ project, sources, fps, api, signal, onProgr
 }
 
 // thumbnail renders a small JPEG of the project for the library card.
-export async function thumbnail(project, sources, now = new Date()) {
+export async function thumbnail(project, sources, now = new Date(), values = null) {
   const duration = projectDuration(project)
   const t = Math.min(1, duration / 2)
   const full = document.createElement('canvas')
@@ -59,10 +59,21 @@ export async function thumbnail(project, sources, now = new Date()) {
   full.height = H
   const ctx = full.getContext('2d')
   await sources.prepare(activeClips(project, t), t)
-  drawFrame(ctx, project, sources, t, now)
+  drawFrame(ctx, project, sources, t, now, values)
   const small = document.createElement('canvas')
   small.width = 480
   small.height = 270
   small.getContext('2d').drawImage(full, 0, 0, 480, 270)
   return small.toDataURL('image/jpeg', 0.85)
+}
+
+// renderStill draws the frame at time 0. Live updates send this instead of the whole timeline.
+export async function renderStill(project, sources, now = new Date(), values = null) {
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  if (sources) await sources.prepare(activeClips(project, 0), 0)
+  drawFrame(ctx, project, sources, 0, now, values)
+  return canvas.toDataURL('image/jpeg', QUALITY)
 }

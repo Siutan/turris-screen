@@ -26,9 +26,10 @@
   import { Sources } from '../lib/sources.js'
   import { Studio } from '../lib/studio.svelte.js'
   import { renderFrames, thumbnail } from '../lib/exporter.js'
+  import { session } from '../lib/session.svelte.js'
   import { decodeClips, encodeClips } from '../lib/menus.js'
 
-  let { projectId = '', status, working = false, job, chromeLead = null, chromeTools = null, onClose, onSaved, onConnect, onRestart } = $props()
+  let { projectId = '', exported = false, status, working = false, job, chromeLead = null, chromeTools = null, onClose, onSaved, onConnect, onRestart } = $props()
 
   // Moves a node into the window title bar. The bar is outside this component.
   function portal(node, target) {
@@ -65,7 +66,7 @@
   let kindOf = (id) => assets.find((a) => a.id === id)?.kind || 'image'
   let motion = $derived(hasMotion(studio.project, kindOf))
   let estimate = $derived(estimateBytes(studio.duration, motion, studio.limits))
-  let busy = $derived(!!saving || working)
+  let busy = $derived(!!saving || working || session.rendering)
 
   function hasBridge() {
     return typeof window !== 'undefined' && !!window.go?.main?.App
@@ -275,9 +276,10 @@
       return false
     }
     saving = { phase: 'draft', label: 'Saving draft', percent: 50 }
+    session.busy = true
     studio.playing = false
     try {
-      const item = await SaveDraft(payload(await thumbnail(studio.project, sources)))
+      const item = await SaveDraft(payload(await thumbnail(studio.project, sources, new Date(), $state.snapshot(session.values))))
       studio.projectId = item.id
       studio.dirty = false
       onSaved?.(item)
@@ -288,6 +290,7 @@
       return false
     } finally {
       saving = null
+      session.busy = false
     }
   }
 
@@ -301,10 +304,12 @@
     studio.playing = false
     abort = new AbortController()
     saving = { phase: 'render', label: 'Rendering frames', percent: 0 }
+    session.busy = true
     const now = new Date()
     let exportId = ''
     try {
-      const thumb = await thumbnail(studio.project, sources, now)
+      const values = $state.snapshot(session.values)
+      const thumb = await thumbnail(studio.project, sources, now, values)
       exportId = await renderFrames({
         project: studio.project,
         sources,
@@ -312,6 +317,7 @@
         api: { BeginExport, AppendFrames, CancelExport },
         signal: abort.signal,
         now,
+        values,
         onProgress: (p) => (saving = { phase: 'render', label: 'Rendering frames', percent: p * 100 }),
       })
       saving = { phase: 'encode', label: 'Encoding', percent: 0 }
@@ -328,11 +334,13 @@
     } finally {
       abort = null
       saving = null
+      session.busy = false
     }
   }
 
   function cancelExport() {
     abort?.abort()
+    session.abort?.abort()
   }
 
   function requestClose() {
@@ -433,6 +441,11 @@
     sources.prune(ids)
   })
 
+  $effect(() => {
+    session.follow($state.snapshot(studio.project), studio.projectId, sources)
+    session.busy = !!saving
+  })
+
   onMount(() => {
     window.addEventListener('keydown', onKey)
     window.addEventListener('paste', onPaste)
@@ -478,6 +491,7 @@
       window.removeEventListener('cut', onCopy)
       if (dropOn) OnFileDropOff()
       abort?.abort()
+      session.unfollow()
       sources.pauseAll()
       sources.prune(new Set())
       clearTimeout(toastTimer)
@@ -542,6 +556,7 @@
       {assets}
       {revision}
       {importing}
+      {exported}
       bind:tab={binTab}
       onImport={() => importFiles()}
       onYouTube={() => openYouTube()}
@@ -552,7 +567,7 @@
     />
 
     <main class="st-center">
-      <Preview {studio} {sources} {revision} {estimate} suspended={saving?.phase === 'render'} {loading} {clipboard} onError={fail} />
+      <Preview {studio} {sources} {revision} {estimate} suspended={saving?.phase === 'render' || session.rendering} {loading} {clipboard} onError={fail} />
     </main>
 
     <Inspector {studio} {sources} {assets} {revision} onError={fail} />
@@ -572,7 +587,19 @@
     <p class="st-toast" class:error={toast.tone === 'error'} role="status">{toast.text}</p>
   {/if}
 
-  {#if saving && saving.phase !== 'draft'}
+  {#if session.rendering}
+    <div class="st-modal" role="dialog" aria-modal="true" aria-label="Updating the cooler">
+      <div class="st-modal-card">
+        <h3>Updating the cooler</h3>
+        <p>{session.renderLabel}… <em>{Math.round(session.renderPercent)}%</em></p>
+        <div class="st-meter"><span style:width="{session.renderPercent}%"></span></div>
+        <p class="st-modal-note">The clip restarts from the beginning when this finishes.</p>
+        {#if session.renderLabel !== 'Encoding'}
+          <button class="st-btn" onclick={cancelExport}>Cancel</button>
+        {/if}
+      </div>
+    </div>
+  {:else if saving && saving.phase !== 'draft'}
     {@const label = saving.phase === 'render' ? saving.label : job?.active ? job.label : saving.label}
     {@const percent = saving.phase === 'render' ? saving.percent : job?.active ? job.percent : 0}
     <div class="st-modal" role="dialog" aria-modal="true" aria-label="Saving">

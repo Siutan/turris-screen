@@ -42,11 +42,19 @@ export function ImportYouTube(arg1:main.YouTubeRequest):Promise<main.Asset>;
 
 export function Job():Promise<main.JobProgress>;
 
+export function PickSourceFile():Promise<string>;
+
+export function RefreshClip(arg1:main.ClipRequest):Promise<void>;
+
+export function RefreshStill(arg1:main.StillRequest):Promise<void>;
+
 export function Remove(arg1:string):Promise<void>;
 
 export function RemoveAsset(arg1:string):Promise<void>;
 
 export function RestartCooler():Promise<main.BridgeStatus>;
+
+export function SampleSources(arg1:Array<main.SourceQuery>):Promise<Array<main.SourceSample>>;
 
 export function SaveDraft(arg1:main.ProjectSave):Promise<main.MediaItem>;
 

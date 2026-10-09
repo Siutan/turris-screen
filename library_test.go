@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testThumb(t *testing.T) string {
@@ -77,6 +78,81 @@ func TestSaveProjectDraftThenExport(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(lib.dir, saved.ID+".project.json")); !os.IsNotExist(err) {
 		t.Fatal("discard left the project file")
+	}
+}
+
+func TestReplaceClipKeepsProject(t *testing.T) {
+	lib := &Library{dir: t.TempDir()}
+	clip := filepath.Join(t.TempDir(), "clip")
+	if err := os.WriteFile(clip, []byte("clip-one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	saved, _, _, err := lib.SaveProject(ProjectSave{
+		Name: "Desk", Kind: "widget", Duration: 5, Data: `{"sources":[]}`, Thumb: testThumb(t),
+	}, clip, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexBefore, err := os.ReadFile(filepath.Join(lib.dir, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before indexFile
+	if err := json.Unmarshal(indexBefore, &before); err != nil {
+		t.Fatal(err)
+	}
+	created := before.Items[0].Created
+	projectBefore, err := os.ReadFile(filepath.Join(lib.dir, saved.ID+".project.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(2 * time.Millisecond)
+	next := filepath.Join(t.TempDir(), "clip-two")
+	if err := os.WriteFile(next, []byte("clip-two"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := lib.ReplaceClip(saved.ID, next, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous != saved.RemoteName {
+		t.Fatalf("previous = %q, saved %q", previous, saved.RemoteName)
+	}
+	indexAfter, err := os.ReadFile(filepath.Join(lib.dir, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var after indexFile
+	if err := json.Unmarshal(indexAfter, &after); err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Items) != 1 {
+		t.Fatalf("items = %d", len(after.Items))
+	}
+	got := after.Items[0]
+	if !got.Created.Equal(created) {
+		t.Fatalf("created changed %s -> %s", created, got.Created)
+	}
+	if got.RemoteName == saved.RemoteName || got.RemoteName == "" || got.Size != 9 || got.Name != "Desk" {
+		t.Fatalf("replaced item %+v", got)
+	}
+	projectAfter, err := os.ReadFile(filepath.Join(lib.dir, saved.ID+".project.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(projectAfter) != string(projectBefore) {
+		t.Fatalf("project json changed %s -> %s", projectBefore, projectAfter)
+	}
+	body, err := os.ReadFile(filepath.Join(lib.dir, got.RemoteName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "clip-two" {
+		t.Fatalf("clip = %q", body)
+	}
+	if _, err := os.Stat(filepath.Join(lib.dir, previous)); !os.IsNotExist(err) {
+		t.Fatal("the previous clip is still on disk")
 	}
 }
 

@@ -398,6 +398,49 @@ func withProjectName(data []byte, name string) ([]byte, error) {
 	return out, nil
 }
 
+// ReplaceClip swaps the encoded cooler file for a new remote name.
+// Created, the project JSON, and the library order stay as they were.
+// previous is the name the panel was using, so the caller can delete it after the new clip is showing.
+func (l *Library) ReplaceClip(id, clipPath string, size int64) (previous string, err error) {
+	if l.dir == "" {
+		return "", fmt.Errorf("media library is unavailable")
+	}
+	if !assetID(id) {
+		return "", fmt.Errorf("that project is no longer in the library")
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	idx, err := l.readIndex()
+	if err != nil {
+		return "", err
+	}
+	for i := range idx.Items {
+		stored := &idx.Items[i]
+		if stored.ID != id {
+			continue
+		}
+		if stored.Draft || stored.RemoteName == "" {
+			return "", fmt.Errorf("save this project to the library before keeping it live")
+		}
+		previous = stored.RemoteName
+		next := remoteName(time.Now())
+		path := filepath.Join(l.dir, next)
+		if err := moveFile(clipPath, path); err != nil {
+			return "", err
+		}
+		stored.RemoteName = next
+		stored.Size = size
+		if err := l.writeIndex(idx); err != nil {
+			return "", err
+		}
+		if previous != "" && previous != next {
+			os.Remove(filepath.Join(l.dir, previous))
+		}
+		return previous, nil
+	}
+	return "", fmt.Errorf("that project is no longer in the library")
+}
+
 // Project returns the editor JSON saved for a library item.
 func (l *Library) Project(id string) (string, error) {
 	if !assetID(id) {

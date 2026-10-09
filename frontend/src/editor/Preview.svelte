@@ -3,6 +3,7 @@
   import { H, W, activeClips, clipLabel, fmtBytes, fmtClock, isTextual } from '../lib/project.js'
   import { clipBounds, drawFrame, hitTest } from '../lib/render.js'
   import { canvasMenu, clipMenu } from '../lib/menus.js'
+  import { session } from '../lib/session.svelte.js'
   import ContextMenu from './ContextMenu.svelte'
 
   let { studio, sources, revision, estimate, suspended = false, loading = false, clipboard, onError } = $props()
@@ -34,11 +35,13 @@
     if (!ctx || suspended) return
     const active = activeClips(studio.project, studio.time)
     sources.sync(active, studio.time, studio.playing)
-    drawFrame(ctx, studio.project, sources, studio.time)
+    const now = new Date()
+    const values = session.values
+    drawFrame(ctx, studio.project, sources, studio.time, now, values)
     const primary = studio.selectedId
     boxes = active
       .filter((a) => a.clip.type !== 'effect' && studio.isSelected(a.clip.id))
-      .map((a) => ({ ...clipBounds(a.clip, sources), id: a.clip.id, text: isTextual(a.clip), locked: !!a.clip.locked, primary: a.clip.id === primary }))
+      .map((a) => ({ ...clipBounds(a.clip, sources, now, { sources: studio.project.sources || [], values }), id: a.clip.id, text: isTextual(a.clip), locked: !!a.clip.locked, primary: a.clip.id === primary }))
   }
 
   $effect(() => {
@@ -46,11 +49,12 @@
     studio.time
     studio.selection
     revision
+    session.revision
     if (!studio.playing && !suspended) schedule()
   })
 
   $effect(() => {
-    if (!studio.playing) return
+    if (!studio.playing || suspended) return
     let startWall = performance.now()
     let startT = untrack(() => (studio.time >= studio.duration - 0.02 ? 0 : studio.time))
     const tick = (now) => {
@@ -85,7 +89,7 @@
   function pointerDown(event) {
     if (event.button !== 0) return
     const p = toCanvas(event)
-    const hit = hitTest(studio.project, sources, studio.time, p.x, p.y)
+    const hit = hitTest(studio.project, sources, studio.time, p.x, p.y, { values: session.values })
     const additive = event.shiftKey || event.ctrlKey || event.metaKey
     if (!hit) {
       if (!additive) studio.select(null)
@@ -129,11 +133,11 @@
   function onContext(event) {
     event.preventDefault()
     const p = toCanvas(event)
-    const hit = hitTest(studio.project, sources, studio.time, p.x, p.y, { locked: true })
+    const hit = hitTest(studio.project, sources, studio.time, p.x, p.y, { locked: true, values: session.values })
     if (hit) {
       if (!studio.isSelected(hit.id)) studio.select(hit.id)
       const count = studio.selection.length
-      menu = { x: event.clientX, y: event.clientY, title: count > 1 ? `${count} clips` : clipLabel(hit), items: clipMenu(studio, clipboard, onError) }
+      menu = { x: event.clientX, y: event.clientY, title: count > 1 ? `${count} clips` : clipLabel(hit, new Date(), { sources: studio.project.sources || [], values: session.values }), items: clipMenu(studio, clipboard, onError) }
     } else {
       studio.select(null)
       menu = { x: event.clientX, y: event.clientY, title: '', items: canvasMenu(studio, p, clipboard, onError) }

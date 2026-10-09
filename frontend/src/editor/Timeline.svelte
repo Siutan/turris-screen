@@ -3,6 +3,7 @@
   import { MIN_CLIP, clipEnd, clipLabel, fmtSourceTime, isTextual } from '../lib/project.js'
   import { round } from '../lib/studio.svelte.js'
   import { clipMenu } from '../lib/menus.js'
+  import { session } from '../lib/session.svelte.js'
   import ContextMenu from './ContextMenu.svelte'
 
   let { studio, sources, revision, clipboard, onError } = $props()
@@ -18,12 +19,17 @@
     return pool.some((c) => studio.canSplit(c))
   })
 
+  function label(clip) {
+    session.revision
+    return clipLabel(clip, new Date(), { sources: studio.project.sources || [], values: session.values })
+  }
+
   function clipContext(event, clip) {
     event.preventDefault()
     event.stopPropagation()
     if (!studio.isSelected(clip.id)) studio.select(clip.id)
     const count = studio.selection.length
-    menu = { x: event.clientX, y: event.clientY, title: count > 1 ? `${count} clips` : clipLabel(clip), items: clipMenu(studio, clipboard, onError) }
+    menu = { x: event.clientX, y: event.clientY, title: count > 1 ? `${count} clips` : label(clip), items: clipMenu(studio, clipboard, onError) }
   }
 
   const GUTTER = 100
@@ -294,7 +300,7 @@
   }
 
   function clipTitle(clip) {
-    const base = `${clipLabel(clip)} · ${clip.duration.toFixed(1)}s`
+    const base = `${label(clip)} · ${clip.duration.toFixed(1)}s`
     if (clip.type !== 'media' || sources.get(clip.assetId)?.kind !== 'video') return base
     const from = clip.in || 0
     return `${base} · plays ${fmtSourceTime(from)}–${fmtSourceTime(from + clip.duration)} of the video. Alt-drag to pick a different part.`
@@ -481,7 +487,7 @@
                   </span>
                 {/if}
                 {#if isTextual(clip)}
-                  <span class="tl-label"><b>T<small>T</small></b>{clipLabel(clip)}</span>
+                  <span class="tl-label"><b>T<small>T</small></b>{label(clip)}</span>
                   <span class="grip" aria-hidden="true">⋮</span>
                 {:else if clip.type === 'effect'}
                   <span class="tl-label">{clipLabel(clip)}</span>

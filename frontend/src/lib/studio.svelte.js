@@ -14,6 +14,8 @@ import {
   textClip,
   uid,
   widgetClip,
+  newSource,
+  clampInterval,
 } from './project.js'
 
 const HISTORY = 120
@@ -57,6 +59,8 @@ export class Studio {
   }
 
   load(project, id = '') {
+    if (!Array.isArray(project.sources)) project.sources = []
+    if (typeof project.live !== 'boolean') project.live = false
     this.project = project
     this.projectId = id
     this.time = 0
@@ -253,6 +257,36 @@ export class Studio {
     })
     this.selectedId = clip.id
     return clip
+  }
+
+  setLive(on) {
+    this.edit((p) => {
+      p.live = !!on
+    })
+  }
+
+  addSource(kind, config) {
+    const source = newSource(kind, config)
+    this.edit((p) => {
+      if (!Array.isArray(p.sources)) p.sources = []
+      p.sources.push(source)
+    })
+    return source
+  }
+
+  updateSource(id, patch) {
+    this.edit((p) => {
+      const source = (p.sources || []).find((s) => s.id === id)
+      if (!source) return
+      if (patch.intervalSec != null) source.intervalSec = clampInterval(source.kind, patch.intervalSec)
+      if (patch.config) source.config = { ...source.config, ...patch.config }
+    })
+  }
+
+  removeSource(id) {
+    this.edit((p) => {
+      p.sources = (p.sources || []).filter((s) => s.id !== id)
+    })
   }
 
   hasWidget(kind) {

@@ -304,6 +304,66 @@ export namespace main {
 	}
 	
 	
+	export class SourceQuery {
+	    id: string;
+	    kind: string;
+	    config: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new SourceQuery(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.config = source["config"];
+	    }
+	}
+	export class SourceSample {
+	    id: string;
+	    fields: Record<string, string>;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SourceSample(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.fields = source["fields"];
+	        this.error = source["error"];
+	    }
+	}
+	export class ClipRequest {
+	    projectId: string;
+	    exportId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projectId = source["projectId"];
+	        this.exportId = source["exportId"];
+	    }
+	}
+	export class StillRequest {
+	    projectId: string;
+	    jpeg: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StillRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projectId = source["projectId"];
+	        this.jpeg = source["jpeg"];
+	    }
+	}
 	export class YouTubeRequest {
 	    url: string;
 	    start: number;

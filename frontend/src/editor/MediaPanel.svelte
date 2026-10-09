@@ -1,5 +1,8 @@
 <script>
-  import { EFFECT_PACKS, TEXT_PRESETS, widgetText } from '../lib/project.js'
+  import { PickSourceFile } from '../../wailsjs/go/main/App.js'
+  import { EFFECT_PACKS, SOURCE_KINDS, TEXT_PRESETS, hasMotion, widgetText } from '../lib/project.js'
+  import { MOTION_MIN_MS, ageLabel } from '../lib/live.js'
+  import { session } from '../lib/session.svelte.js'
   import { tooltip } from '../lib/tooltip.js'
   import ContextMenu from './ContextMenu.svelte'
 
@@ -9,6 +12,7 @@
     assets,
     revision,
     importing = false,
+    exported = false,
     tab = $bindable('image'),
     onImport,
     onYouTube,
@@ -69,6 +73,46 @@
     const d = sources.get(asset.id)?.duration
     if (!d || asset.kind === 'image') return ''
     return d < 10 ? `${d.toFixed(1)}s` : `${Math.round(d)}s`
+  }
+
+  let kindOf = (id) => assets.find((asset) => asset.id === id)?.kind || 'image'
+  let motion = $derived(hasMotion(studio.project, kindOf))
+  let liveReason = $derived(!exported ? 'Save to the library and show it on the cooler before keeping this live.' : '')
+  let liveDetail = $derived.by(() => {
+    const parts = []
+    if (liveReason) parts.push(liveReason)
+    if (motion) parts.push(`Video, GIF, and effect clips restart from the beginning. A new copy goes out at least ${MOTION_MIN_MS / 60000} minutes apart.`)
+    if (!parts.length) parts.push('The cooler updates while this app is open and Keep live is on.')
+    return parts.join(' ')
+  })
+  let projectSources = $derived(studio.project.sources || [])
+
+  function sourceState(source) {
+    session.revision
+    const value = session.values[source.id]
+    if (!value) return { label: 'Waiting', bad: false }
+    if (value.error) return { label: value.error, bad: true }
+    const age = ageLabel(value.at, Date.now())
+    return { label: age ? `OK · ${age}` : 'OK', bad: false }
+  }
+
+  function addSource(kind) {
+    act(() => studio.addSource(kind))
+  }
+
+  async function addFile() {
+    if (typeof window === 'undefined' || !window.go?.main?.App) {
+      onError?.(new Error('Start the desktop app to choose a file.'))
+      return
+    }
+    try {
+      const path = await PickSourceFile()
+      if (!path) return
+      const mode = path.toLowerCase().endsWith('.json') ? 'json' : 'line'
+      act(() => studio.addSource('file', { path, mode, field: '' }))
+    } catch (err) {
+      onError?.(err)
+    }
   }
 
   function act(fn) {
@@ -228,8 +272,66 @@
           ><i></i></button>
         </div>
       {/each}
+    <div class="src-live">
+      <div>
+        <strong>Keep live</strong>
+        <p>{liveDetail}</p>
+      </div>
+      <button
+        class="switch"
+        class:on={studio.project.live}
+        role="switch"
+        aria-checked={!!studio.project.live}
+        aria-label="Keep live"
+        disabled={!!liveReason && !studio.project.live}
+        onclick={() => {
+          if (liveReason && !studio.project.live) return
+          act(() => studio.setLive(!studio.project.live))
+        }}
+      ><i></i></button>
     </div>
-    <p class="bin-note">Turn a widget on here, then drag it on the canvas. Select it and its options show on the right. The saved clip shows the time from when you save.</p>
+    <div class="src-add">
+      {#each ['countdown', 'system', 'temps', 'media'] as kind (kind)}
+        {@const spec = SOURCE_KINDS[kind]}
+        {@const taken = kind !== 'countdown' && projectSources.some((source) => source.kind === kind)}
+        <button onclick={() => addSource(kind)} disabled={taken}>{taken ? spec.label : `Add ${spec.label.toLowerCase()}`}</button>
+      {/each}
+      <button onclick={addFile}>Add file</button>
+    </div>
+    {#each projectSources as source (source.id)}
+      {@const spec = SOURCE_KINDS[source.kind]}
+      {@const state = sourceState(source)}
+      <div class="src-row">
+        <div class="src-copy">
+          <strong>{source.name}</strong>
+          <em class:bad={state.bad}>{state.label}</em>
+        </div>
+        {#if source.kind === 'countdown'}
+          <input class="src-input" value={source.config.label} aria-label="Countdown label" onchange={(e) => act(() => studio.updateSource(source.id, { config: { label: e.currentTarget.value } }))} />
+          <input class="src-input" type="datetime-local" value={source.config.target} aria-label="Countdown target" onchange={(e) => act(() => studio.updateSource(source.id, { config: { target: e.currentTarget.value } }))} />
+        {:else if source.kind === 'file'}
+          <p class="src-path" title={source.config.path}>{source.config.path || 'No file'}</p>
+          <div class="src-file">
+            <select class="src-input" value={source.config.mode} aria-label="File mode" onchange={(e) => act(() => studio.updateSource(source.id, { config: { mode: e.currentTarget.value } }))}>
+              <option value="line">First line</option>
+              <option value="json">JSON field</option>
+            </select>
+            {#if source.config.mode === 'json'}
+              <input class="src-input" value={source.config.field} placeholder="score.home" aria-label="JSON field" onchange={(e) => act(() => studio.updateSource(source.id, { config: { field: e.currentTarget.value } }))} />
+            {/if}
+          </div>
+        {/if}
+        <label class="src-interval">
+          <span>Every</span>
+          <input type="number" min={spec.min} step="1" value={source.intervalSec} aria-label="{source.name} interval" onchange={(e) => act(() => studio.updateSource(source.id, { intervalSec: Number(e.currentTarget.value) }))} />
+          <span>s</span>
+        </label>
+        <button class="src-remove" onclick={() => act(() => studio.removeSource(source.id))}>Remove</button>
+      </div>
+    {/each}
+    {#if session.lastError}<p class="bin-note bad">{session.lastError}</p>{/if}
+    <p class="bin-note">Turn a widget on here, then drag it on the canvas. The cooler updates while this app is open and Keep live is on.</p>
+    </div>
   {/if}
 </section>
 

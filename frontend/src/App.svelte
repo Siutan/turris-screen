@@ -1,11 +1,14 @@
 <script>
   import { onMount } from 'svelte'
-  import { ActiveName, Apply, Connect, Duplicate, GetLibrary, Job, Remove, RestartCooler } from '../wailsjs/go/main/App.js'
+  import { ActiveName, AppendFrames, Apply, BeginExport, CancelExport, Connect, Duplicate, GetAssets, GetLibrary, GetProject, Job, RefreshClip, RefreshStill, Remove, RestartCooler, SampleSources } from '../wailsjs/go/main/App.js'
   import { EventsOn, Quit, WindowMinimise, WindowToggleMaximise } from '../wailsjs/runtime/runtime.js'
   import Brand from './Brand.svelte'
   import DeviceChip from './DeviceChip.svelte'
   import Editor from './editor/Editor.svelte'
   import { applyTheme, saveTheme, storedTheme } from './lib/theme.js'
+  import { Sources } from './lib/sources.js'
+  import { DEFAULT_LIMITS } from './lib/project.js'
+  import { runLiveTick, session } from './lib/session.svelte.js'
 
   let status = $state({
     connected: false,
@@ -181,9 +184,54 @@
   }
 
   async function closeEditor() {
+    session.unfollow()
     view = 'home'
     editing = ''
     await settle()
+    if (!session.project?.live) await resumeLive()
+  }
+
+  async function resumeLive() {
+    if (view === 'edit' || session.attached || session.project?.live) return
+    if (!hasBridge() || !status.connected) return
+    const item = library.find((entry) => entry.remoteName && entry.remoteName === activeName && entry.editable && !entry.draft)
+    if (!item) return
+    try {
+      const project = JSON.parse(await GetProject(item.id))
+      if (!Array.isArray(project.sources)) project.sources = []
+      const assets = (await GetAssets()) ?? []
+      if (!project?.live) return
+      const media = new Sources(() => {})
+      await Promise.all(assets.map((asset) => media.load(asset)))
+      session.park(project, item.id, media)
+    } catch {
+      /* the cooler keeps the last frame */
+    }
+  }
+
+  function liveItem() {
+    if (!session.projectId) return null
+    return library.find((entry) => entry.id === session.projectId) ?? null
+  }
+
+  async function tickLive() {
+    if (!hasBridge()) return
+    await runLiveTick({
+      connected: status.connected,
+      activeName,
+      item: liveItem(),
+      busy: working || job.active,
+      kindOf: (id) => session.media?.entries?.get(id)?.kind || 'image',
+      fps: DEFAULT_LIMITS.renderFps,
+      api: { BeginExport, AppendFrames, CancelExport },
+      sample: (queries) => SampleSources(queries),
+      refresh: (req) => RefreshStill(req),
+      refreshClip: (req) => RefreshClip(req),
+      reload: async () => {
+        await refreshLibrary()
+        await refreshActive()
+      },
+    })
   }
 
   async function onSaved() {
@@ -350,11 +398,17 @@
     document.addEventListener('keydown', onKey)
     connect()
       .then(refreshLibrary)
+      .then(refreshActive)
+      .then(resumeLive)
       .catch((err) => {
         error = message(err)
       })
+    const liveTimer = setInterval(() => {
+      tickLive().catch(() => {})
+    }, 1000)
     return () => {
       themeQuery.removeEventListener('change', onTheme)
+      clearInterval(liveTimer)
       if (typeof stop === 'function') stop()
       document.removeEventListener('click', closeMenu)
       document.removeEventListener('keydown', onKey)
@@ -561,6 +615,7 @@
       {#key editorKey}
         <Editor
           projectId={editing}
+          exported={!!library.find((item) => item.id === editing && item.remoteName && !item.draft)}
           {status}
           {working}
           {job}

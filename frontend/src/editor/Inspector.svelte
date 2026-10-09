@@ -1,11 +1,13 @@
 <script>
   import SourceRange from './SourceRange.svelte'
-  import { DATE_FORMATS, FILTERS, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
+  import { CLOCK_FIELDS, DATE_FORMATS, FILTERS, FONTS, SOURCE_KINDS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
 
   let { studio, sources, assets, revision, onError } = $props()
 
   let open = $state({ media: true, source: true, text: true, adjust: true, effect: true })
   let mediaMenu = $state(false)
+  let fieldMenu = $state(false)
+  let textEl = $state(null)
 
   let many = $derived(studio.selection.length > 1)
   let clip = $derived(many ? null : (studio.selected?.clip ?? null))
@@ -43,6 +45,19 @@
     { key: 'saturation', label: 'Saturation', min: -100, max: 100 },
     { key: 'blur', label: 'Blur', min: 0, max: 20 },
   ]
+
+  function insertField(token) {
+    const target = clip
+    if (!target || target.type !== 'text') return
+    fieldMenu = false
+    const value = target.text || ''
+    const start = textEl?.selectionStart ?? value.length
+    const end = textEl?.selectionEnd ?? value.length
+    const next = `${value.slice(0, start)}{{${token}}}${value.slice(end)}`
+    studio.edit(() => {
+      target.text = next
+    })
+  }
 
   function set(key, value) {
     const target = clip
@@ -182,14 +197,29 @@
       {#if open.text}
         <div class="ins-body">
           {#if clip.type === 'text'}
-            <textarea rows="2" value={clip.text} oninput={(e) => set('text', e.currentTarget.value)} aria-label="Text" spellcheck="false"></textarea>
+            <textarea rows="2" bind:this={textEl} value={clip.text} oninput={(e) => set('text', e.currentTarget.value)} aria-label="Text" spellcheck="false"></textarea>
+            <div class="ins-more-wrap">
+              <button class="ins-action" onclick={() => (fieldMenu = !fieldMenu)} aria-expanded={fieldMenu}>Insert field</button>
+              {#if fieldMenu}
+                <div class="menu ins-menu field-menu">
+                  {#each CLOCK_FIELDS as field (field.id)}
+                    <button onclick={() => insertField(`clock.${field.id}`)}>{field.label}</button>
+                  {/each}
+                  {#each studio.project.sources || [] as source (source.id)}
+                    {#each SOURCE_KINDS[source.kind]?.fields || [] as field (field.id)}
+                      <button onclick={() => insertField(`${source.id}.${field.id}`)}>{source.name} · {field.label}</button>
+                    {/each}
+                  {/each}
+                </div>
+              {/if}
+            </div>
           {:else}
             <select class="ins-select wide" value={clip.format} onchange={(e) => set('format', e.currentTarget.value)} aria-label="Format">
               {#each clip.type === 'time' ? TIME_FORMATS : DATE_FORMATS as f (f.id)}
                 <option value={f.id}>{f.label}</option>
               {/each}
             </select>
-            <p class="ins-note">The cooler shows the {clip.type} from when you save. It does not tick on its own.</p>
+            <p class="ins-note">The cooler updates while this app is open and Keep live is on.</p>
           {/if}
           <div class="ins-row">
             <span>Font</span>

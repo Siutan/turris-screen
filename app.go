@@ -27,6 +27,7 @@ type App struct {
 
 	ytMu     sync.Mutex
 	ytCancel context.CancelFunc
+	stats    hostStats
 }
 
 // BridgeStatus is what the window shows about the cooler connection.
@@ -410,6 +411,128 @@ func (a *App) FinishExport(req ExportRequest) (ExportResult, error) {
 	result.Shown = true
 	a.progress("On the cooler", 100)
 	return result, nil
+}
+
+// StillRequest is one JPEG of a live project, already rendered in the editor.
+type StillRequest struct {
+	ProjectID string `json:"projectId"`
+	JPEG      string `json:"jpeg"`
+}
+
+// ClipRequest is a rendered live clip. The cooler restarts playback when it is shown.
+type ClipRequest struct {
+	ProjectID string `json:"projectId"`
+	ExportID  string `json:"exportId"`
+}
+
+// RefreshStill encodes one frame and shows it in place of the project's current clip.
+// It does not rewrite the project JSON or the library card.
+func (a *App) RefreshStill(req StillRequest) error {
+	if strings.TrimSpace(req.ProjectID) == "" || strings.TrimSpace(req.JPEG) == "" {
+		return fmt.Errorf("nothing to send")
+	}
+	data, err := decodeImagePayload(req.JPEG)
+	if err != nil {
+		return err
+	}
+	ffmpeg, err := findFFmpeg()
+	if err != nil {
+		return err
+	}
+	a.opMu.Lock()
+	defer a.opMu.Unlock()
+	dir, err := os.MkdirTemp("", "turris-still-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	imgPath := filepath.Join(dir, "frame.jpg")
+	if err := os.WriteFile(imgPath, data, 0o644); err != nil {
+		return err
+	}
+	clipPath := filepath.Join(dir, "clip")
+	if err := encodeStill(ffmpeg, imgPath, clipPath); err != nil {
+		return err
+	}
+	info, err := os.Stat(clipPath)
+	if err != nil {
+		return err
+	}
+	previous, err := a.library.ReplaceClip(req.ProjectID, clipPath, info.Size())
+	if err != nil {
+		return err
+	}
+	if err := a.bridge.Connect(); err != nil {
+		return err
+	}
+	item, path, err := a.library.File(req.ProjectID)
+	if err != nil {
+		return err
+	}
+	if err := a.publishFrom(item.RemoteName, path, 20); err != nil {
+		return err
+	}
+	a.removeIfInactive(previous)
+	return nil
+}
+
+// RefreshClip encodes a rendered timeline and shows it in place of the current clip.
+// The project JSON and the library card stay as they were. Playback starts over.
+func (a *App) RefreshClip(req ClipRequest) error {
+	job, err := a.exports.take(req.ExportID)
+	if err != nil {
+		return err
+	}
+	defer job.discard()
+	if strings.TrimSpace(req.ProjectID) == "" {
+		return fmt.Errorf("nothing to send")
+	}
+	framesPath, frames, err := job.close()
+	if err != nil {
+		return err
+	}
+	ffmpeg, err := findFFmpeg()
+	if err != nil {
+		return err
+	}
+	a.opMu.Lock()
+	defer a.opMu.Unlock()
+	defer a.clearProgress()
+	clipPath := filepath.Join(job.dir, "clip.h264_1280x720")
+	size, err := encodeClip(ffmpeg, framesPath, renderFPS, frames, true, clipPath, nil)
+	if err != nil {
+		return err
+	}
+	previous, err := a.library.ReplaceClip(req.ProjectID, clipPath, size)
+	if err != nil {
+		return err
+	}
+	if err := a.bridge.Connect(); err != nil {
+		return err
+	}
+	item, path, err := a.library.File(req.ProjectID)
+	if err != nil {
+		return err
+	}
+	if err := a.publishFrom(item.RemoteName, path, 20); err != nil {
+		return err
+	}
+	a.removeIfInactive(previous)
+	return nil
+}
+
+// PickSourceFile asks for a text or JSON file a live source can read.
+func (a *App) PickSourceFile() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("start the desktop app to choose a file")
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Choose a text or JSON file",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Text and JSON (*.txt;*.json;*.log)", Pattern: "*.txt;*.json;*.log"},
+			{DisplayName: "All files", Pattern: "*.*"},
+		},
+	})
 }
 
 // Apply sends a library clip to the cooler again.

@@ -82,6 +82,18 @@ export function Job() {
   return window['go']['main']['App']['Job']();
 }
 
+export function PickSourceFile() {
+  return window['go']['main']['App']['PickSourceFile']();
+}
+
+export function RefreshClip(arg1) {
+  return window['go']['main']['App']['RefreshClip'](arg1);
+}
+
+export function RefreshStill(arg1) {
+  return window['go']['main']['App']['RefreshStill'](arg1);
+}
+
 export function Remove(arg1) {
   return window['go']['main']['App']['Remove'](arg1);
 }
@@ -92,6 +104,10 @@ export function RemoveAsset(arg1) {
 
 export function RestartCooler() {
   return window['go']['main']['App']['RestartCooler']();
+}
+
+export function SampleSources(arg1) {
+  return window['go']['main']['App']['SampleSources'](arg1);
 }
 
 export function SaveDraft(arg1) {

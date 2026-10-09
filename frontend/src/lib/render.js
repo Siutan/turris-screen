@@ -1,5 +1,6 @@
 import { paintEffect, syncEffects } from './effects.js'
 import { H, W, activeClips, filterCSS, isTextual, widgetText } from './project.js'
+import { resolveText } from './template.js'
 
 let measureCtx
 
@@ -13,7 +14,8 @@ export function fontString(weight, size, family) {
 }
 
 // drawFrame paints the project at time t onto a 1280×720 context.
-export function drawFrame(ctx, project, sources, t, now = new Date()) {
+export function drawFrame(ctx, project, sources, t, now = new Date(), values = null) {
+  const env = { sources: project.sources || [], values: values || {} }
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.filter = 'none'
@@ -23,7 +25,7 @@ export function drawFrame(ctx, project, sources, t, now = new Date()) {
   syncEffects(project)
   for (const { clip } of activeClips(project, t)) {
     if (clip.type === 'media') drawMedia(ctx, clip, sources, t)
-    else if (isTextual(clip)) drawText(ctx, clip, now)
+    else if (isTextual(clip)) drawText(ctx, clip, now, env)
     else if (clip.type === 'effect') paintEffect(ctx, clip, t)
   }
   ctx.restore()
@@ -50,8 +52,10 @@ function drawMedia(ctx, clip, sources, t) {
 }
 
 // textLayout measures a text or widget clip. Widgets draw a smaller suffix (AM/PM) after the time.
-export function textLayout(clip, now = new Date(), ctx = measurer()) {
-  const content = clip.type === 'text' ? { main: clip.text || '', suffix: '' } : widgetText(clip, now)
+export function textLayout(clip, now = new Date(), ctx = measurer(), env = null) {
+  const content = clip.type === 'text'
+    ? { main: env ? resolveText(clip.text || '', env.sources || [], env.values || {}, now) : (clip.text || ''), suffix: '' }
+    : widgetText(clip, now)
   const shape = (s) => (clip.upper ? s.toUpperCase() : s)
   const lines = shape(content.main).split('\n')
   const suffix = shape(content.suffix)
@@ -77,8 +81,8 @@ export function textLayout(clip, now = new Date(), ctx = measurer()) {
   return { lines, widths, suffix, suffixSize, suffixW, gap, lineH, left, top: clip.y - blockH / 2, blockW, blockH }
 }
 
-function drawText(ctx, clip, now) {
-  const L = textLayout(clip, now, ctx)
+function drawText(ctx, clip, now, env) {
+  const L = textLayout(clip, now, ctx, env)
   ctx.save()
   ctx.fillStyle = clip.color || '#fff'
   ctx.textBaseline = 'middle'
@@ -102,25 +106,26 @@ function drawText(ctx, clip, now) {
 }
 
 // clipBounds is the on-canvas box of a clip, in 1280×720 units.
-export function clipBounds(clip, sources, now = new Date()) {
+export function clipBounds(clip, sources, now = new Date(), env = null) {
   if (clip.type === 'effect') return { x: 0, y: 0, w: W, h: H }
   if (clip.type === 'media') {
     const entry = sources.get(clip.assetId)
     return mediaRect(clip, entry?.width, entry?.height)
   }
-  const L = textLayout(clip, now)
+  const L = textLayout(clip, now, measurer(), env)
   return { x: L.left, y: L.top, w: L.blockW, h: L.blockH }
 }
 
 // hitTest returns the top-most visible clip under (x, y) at time t. Locked clips are
 // skipped unless asked for, so clicks reach whatever is under them.
-export function hitTest(project, sources, t, x, y, { locked = false, now = new Date() } = {}) {
+export function hitTest(project, sources, t, x, y, { locked = false, now = new Date(), values = null } = {}) {
+  const env = { sources: project.sources || [], values: values || {} }
   const active = activeClips(project, t)
   for (let i = active.length - 1; i >= 0; i--) {
     const { clip } = active[i]
     if (clip.type === 'effect') continue
     if (clip.locked && !locked) continue
-    const b = clipBounds(clip, sources, now)
+    const b = clipBounds(clip, sources, now, env)
     const pad = isTextual(clip) ? 12 : 0
     if (x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad) return clip
   }

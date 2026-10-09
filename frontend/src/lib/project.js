@@ -1,5 +1,7 @@
 // The editor's project model. Everything here is plain data so it can be saved as JSON.
 
+import { resolveText } from './template.js'
+
 export const W = 1280
 export const H = 720
 export const MIN_CLIP = 0.1
@@ -21,7 +23,7 @@ export function uid(prefix) {
 }
 
 export function newProject(name = 'Untitled') {
-  return { version: 1, name, tracks: [newTrack()] }
+  return { version: 1, name, tracks: [newTrack()], sources: [], live: false }
 }
 
 export function newTrack() {
@@ -57,6 +59,93 @@ export const WEIGHTS = [
 ]
 
 export const SWATCHES = ['#ffffff', '#1c1e22', '#c9ccd3', '#cdd5e4', '#f7a8ad', '#fcd59a']
+
+export const CLOCK_FIELDS = [
+  { id: 'time12', label: '12-hour time' },
+  { id: 'time24', label: '24-hour time' },
+  { id: 'date', label: 'Date' },
+]
+
+export const SOURCE_KINDS = {
+  countdown: {
+    label: 'Countdown',
+    interval: 60,
+    min: 60,
+    fields: [
+      { id: 'remaining', label: 'Remaining' },
+      { id: 'label', label: 'Label' },
+    ],
+  },
+  system: {
+    label: 'System',
+    interval: 5,
+    min: 2,
+    fields: [
+      { id: 'cpu', label: 'CPU' },
+      { id: 'ramUsed', label: 'RAM used' },
+      { id: 'ramTotal', label: 'RAM total' },
+      { id: 'ramPercent', label: 'RAM percent' },
+      { id: 'diskFree', label: 'Disk free' },
+      { id: 'diskTotal', label: 'Disk total' },
+      { id: 'netDown', label: 'Download' },
+      { id: 'netUp', label: 'Upload' },
+    ],
+  },
+  temps: {
+    label: 'Temperatures',
+    interval: 5,
+    min: 2,
+    fields: [
+      { id: 'cpu', label: 'CPU' },
+      { id: 'gpu', label: 'GPU' },
+    ],
+  },
+  media: {
+    label: 'Now playing',
+    interval: 2,
+    min: 2,
+    fields: [
+      { id: 'title', label: 'Title' },
+      { id: 'artist', label: 'Artist' },
+      { id: 'album', label: 'Album' },
+      { id: 'state', label: 'State' },
+    ],
+  },
+  file: {
+    label: 'File',
+    interval: 5,
+    min: 2,
+    fields: [{ id: 'text', label: 'Text' }],
+  },
+}
+
+function defaultSourceConfig(kind) {
+  if (kind === 'countdown') {
+    const when = new Date(Date.now() + 60 * 60 * 1000)
+    const target = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`
+    return { target, label: 'Countdown' }
+  }
+  if (kind === 'file') return { path: '', mode: 'line', field: '' }
+  return {}
+}
+
+export function clampInterval(kind, seconds) {
+  const min = SOURCE_KINDS[kind]?.min ?? 2
+  const n = Math.round(Number(seconds) || min)
+  return Math.max(min, n)
+}
+
+export function newSource(kind, config = {}) {
+  const spec = SOURCE_KINDS[kind]
+  if (!spec) throw new Error('That source is not available.')
+  return {
+    id: uid('s'),
+    name: spec.label,
+    kind,
+    intervalSec: spec.interval,
+    config: { ...defaultSourceConfig(kind), ...config },
+  }
+}
 
 export const TEXT_PRESETS = [
   { id: 'heading', label: 'Add a heading', text: 'Heading', size: 120, weight: 600 },
@@ -259,7 +348,7 @@ export function projectKind(project, kindOfAsset) {
   const kinds = new Set(clips.filter((c) => c.type === 'media').map((c) => kindOfAsset(c.assetId)))
   if (kinds.has('video')) return 'video'
   if (kinds.has('gif')) return 'gif'
-  if (clips.some((c) => c.type === 'time' || c.type === 'date')) return 'widget'
+  if ((project.sources && project.sources.length) || clips.some((c) => c.type === 'time' || c.type === 'date')) return 'widget'
   return 'image'
 }
 
@@ -297,8 +386,11 @@ export function widgetText(clip, now) {
   return { main: `${weekday}, ${month} ${pad(now.getDate())}`, suffix: '' }
 }
 
-export function clipLabel(clip, now = new Date()) {
-  if (clip.type === 'text') return clip.text.split('\n')[0] || 'Text'
+export function clipLabel(clip, now = new Date(), env = null) {
+  if (clip.type === 'text') {
+    const text = env ? resolveText(clip.text || '', env.sources || [], env.values || {}, now) : clip.text || ''
+    return text.split('\n')[0] || 'Text'
+  }
   if (clip.type === 'effect') return effectMeta(clip.effect)?.label || clip.name || 'Effect'
   if (clip.type === 'time' || clip.type === 'date') {
     const { main, suffix } = widgetText(clip, now)
