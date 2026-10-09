@@ -14,6 +14,7 @@
     SaveDraft,
   } from '../../wailsjs/go/main/App.js'
   import { OnFileDrop, OnFileDropOff } from '../../wailsjs/runtime/runtime.js'
+  import Brand from '../Brand.svelte'
   import DeviceChip from '../DeviceChip.svelte'
   import Inspector from './Inspector.svelte'
   import MediaPanel from './MediaPanel.svelte'
@@ -26,7 +27,21 @@
   import { renderFrames, thumbnail } from '../lib/exporter.js'
   import { decodeClips, encodeClips } from '../lib/menus.js'
 
-  let { projectId = '', status, working = false, job, onClose, onSaved, onConnect, onRestart } = $props()
+  let { projectId = '', status, working = false, job, chromeLead = null, chromeTools = null, onClose, onSaved, onConnect, onRestart } = $props()
+
+  // Moves a node into the window title bar. The bar is outside this component.
+  function portal(node, target) {
+    const place = (el) => {
+      if (el && node.parentNode !== el) el.appendChild(node)
+    }
+    place(target)
+    return {
+      update: place,
+      destroy() {
+        node.remove()
+      },
+    }
+  }
 
   let revision = $state(0)
   const sources = new Sources(() => revision++)
@@ -459,19 +474,22 @@
 </script>
 
 <div class="studio">
-  <header class="st-top">
-    <button class="brand st-brand nodrag" onclick={requestClose} title="Back to your projects" disabled={busy}>
-      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-        <g fill="currentColor">
-          <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(0 16 16)" />
-          <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(120 16 16)" />
-          <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(240 16 16)" />
-          <circle cx="16" cy="16" r="2.5" />
-        </g>
-      </svg>
-      Turris Studio
-    </button>
+  <div class="chrome-back" use:portal={chromeLead}>
+    <Brand interactive title="Back to your projects" disabled={busy} onclick={requestClose} />
+  </div>
+  <div class="chrome-editor" use:portal={chromeTools}>
+    <div class="st-history">
+      <button class="st-round" onclick={() => studio.undo()} disabled={!studio.canUndo || busy} aria-label="Undo" title="Undo (Ctrl+Z)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4L2.5 7l3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M3 7h6.5a3.5 3.5 0 010 7H8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
+      </button>
+      <button class="st-round" onclick={() => studio.redo()} disabled={!studio.canRedo || busy} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 4l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M13 7H6.5a3.5 3.5 0 000 7H8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
+      </button>
+    </div>
+    <DeviceChip compact {status} working={busy} {onConnect} {onRestart} />
+  </div>
 
+  <header class="st-top">
     <div class="st-title nodrag">
       {#if naming}
         <!-- svelte-ignore a11y_autofocus -->
@@ -494,21 +512,10 @@
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.9l2.5 2.5-7.4 7.4-3 .5.5-3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg>
         </button>
       {/if}
-      <span class="st-sub">1280 × 720{studio.dirty ? ' · Unsaved changes' : ''}</span>
+      <span class="st-sub">1280 × 720{studio.dirty ? ' · Unsaved' : ''}</span>
     </div>
 
     <div class="spacer"></div>
-
-    <div class="st-history nodrag">
-      <button class="st-round" onclick={() => studio.undo()} disabled={!studio.canUndo || busy} aria-label="Undo" title="Undo (Ctrl+Z)">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4L2.5 7l3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M3 7h6.5a3.5 3.5 0 010 7H8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
-      </button>
-      <button class="st-round" onclick={() => studio.redo()} disabled={!studio.canRedo || busy} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 4l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /><path d="M13 7H6.5a3.5 3.5 0 000 7H8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
-      </button>
-    </div>
-
-    <DeviceChip {status} working={busy} {onConnect} {onRestart} />
 
     <button class="st-btn nodrag" onclick={saveDraft} disabled={busy || loading}>Save Draft</button>
     <button class="st-btn primary nodrag" onclick={saveToLibrary} disabled={busy || loading || studio.duration <= 0} title={status.connected ? 'Save and show on the cooler' : 'Save to your library'}>

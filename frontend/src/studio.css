@@ -2,7 +2,7 @@
 
 .shell.editing {
   overflow: hidden;
-  padding: 12px 14px 14px;
+  padding: 8px 14px 12px;
   gap: 0;
   background: #f5f6f8;
 }
@@ -15,7 +15,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   position: relative;
   user-select: none;
 }
@@ -27,26 +27,33 @@
 .st-top {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 2px 4px 0;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 2px;
   --wails-draggable: drag;
 }
 
-.st-brand {
-  padding: 6px 8px 6px 2px;
-  border-radius: 10px;
-  margin-right: 26px;
-}
-
-.st-brand:hover:not(:disabled) { color: #3c4048; }
-
 .st-title {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
   min-width: 0;
-  padding-left: 22px;
-  border-left: 1px solid #e6e8ec;
+}
+
+.studio > .chrome-back,
+.studio > .chrome-editor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.chrome-editor {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .st-name {
@@ -84,27 +91,39 @@
 
 .st-sub { color: var(--muted); font-size: 12px; }
 
-.st-history { display: flex; gap: 6px; margin-right: 6px; }
+.st-history {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chrome .st-history::after {
+  content: "";
+  width: 1px;
+  height: 16px;
+  margin-left: 6px;
+  background: #e0e3e8;
+}
 
 .st-round {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
-  border: 1px solid #e6e8ec;
-  background: white;
+  border: 0;
+  background: transparent;
   color: #3c4048;
 }
 
 .st-round svg { width: 15px; height: 15px; }
 
-.st-round:hover:not(:disabled) { border-color: #d5d8de; }
+.st-round:hover:not(:disabled) { background: rgba(22, 24, 30, 0.06); }
 
 .st-btn {
-  height: 40px;
-  padding: 0 18px;
-  border-radius: 12px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
   background: #eceef1;
   font-size: 13.5px;
   font-weight: 550;
