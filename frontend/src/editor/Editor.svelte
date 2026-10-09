@@ -512,14 +512,14 @@
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.9l2.5 2.5-7.4 7.4-3 .5.5-3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg>
         </button>
       {/if}
-      <span class="st-sub">1280 × 720{studio.dirty ? ' · Unsaved' : ''}</span>
+      {#if studio.dirty}<span class="st-sub">Unsaved</span>{/if}
     </div>
 
     <div class="spacer"></div>
 
-    <button class="st-btn nodrag" onclick={saveDraft} disabled={busy || loading}>Save Draft</button>
-    <button class="st-btn primary nodrag" onclick={saveToLibrary} disabled={busy || loading || studio.duration <= 0} title={status.connected ? 'Save and show on the cooler' : 'Save to your library'}>
-      Save to Library
+    <button class="st-btn nodrag" onclick={saveDraft} disabled={busy || loading}>Save</button>
+    <button class="st-btn primary nodrag" onclick={saveToLibrary} disabled={busy || loading || studio.duration <= 0} title={status.connected ? 'Save and show on the cooler' : 'Save the project. The cooler is not connected.'}>
+      Save &amp; Apply
     </button>
   </header>
 
@@ -587,7 +587,7 @@
         <div class="st-modal-actions">
           <button class="st-btn" onclick={() => (leaving = false)}>Cancel</button>
           <button class="st-btn danger" onclick={() => { leaving = false; onClose?.() }}>Discard</button>
-          <button class="st-btn primary" onclick={saveAndLeave}>Save Draft</button>
+          <button class="st-btn primary" onclick={saveAndLeave}>Save</button>
         </div>
       </div>
     </div>
