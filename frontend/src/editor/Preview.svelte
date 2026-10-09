@@ -37,7 +37,7 @@
     drawFrame(ctx, studio.project, sources, studio.time)
     const primary = studio.selectedId
     boxes = active
-      .filter((a) => studio.isSelected(a.clip.id))
+      .filter((a) => a.clip.type !== 'effect' && studio.isSelected(a.clip.id))
       .map((a) => ({ ...clipBounds(a.clip, sources), id: a.clip.id, text: isTextual(a.clip), locked: !!a.clip.locked, primary: a.clip.id === primary }))
   }
 
@@ -95,7 +95,7 @@
     if (additive && !wasSelected) studio.toggleSelect(hit.id)
     else if (!wasSelected) studio.select(hit.id)
     else if (!additive) studio.selection = [...studio.selection.filter((id) => id !== hit.id), hit.id]
-    const group = studio.selectedClips.filter((f) => !f.clip.locked).map((f) => ({ clip: f.clip, x0: f.clip.x || 0, y0: f.clip.y || 0 }))
+    const group = studio.selectedClips.filter((f) => !f.clip.locked && f.clip.type !== 'effect').map((f) => ({ clip: f.clip, x0: f.clip.x || 0, y0: f.clip.y || 0 }))
     const before = studio.serialize()
     const sx = event.clientX
     const sy = event.clientY
@@ -142,7 +142,7 @@
 
   function onWheel(event) {
     const clip = studio.selected?.clip
-    if (!clip || studio.selection.length > 1 || !boxes.length || clip.locked) return
+    if (!clip || clip.type === 'effect' || studio.selection.length > 1 || !boxes.length || clip.locked) return
     event.preventDefault()
     const f = event.deltaY < 0 ? 1.06 : 1 / 1.06
     studio.edit(() => {
@@ -207,7 +207,7 @@
       {#if studio.duration <= 0 && !loading}
         <div class="pv-empty">
           <strong>The canvas is empty</strong>
-          <span>Add media, text, or a widget from the left, or drop files anywhere.</span>
+          <span>Add media, text, a widget, or an effect from the left, or drop files anywhere.</span>
         </div>
       {/if}
     </div>

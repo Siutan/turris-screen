@@ -1,9 +1,9 @@
 <script>
-  import { DATE_FORMATS, FILTERS, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
+  import { DATE_FORMATS, FILTERS, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
 
   let { studio, sources, assets, revision, onError } = $props()
 
-  let open = $state({ media: true, text: true, adjust: true })
+  let open = $state({ media: true, text: true, adjust: true, effect: true })
   let mediaMenu = $state(false)
 
   let many = $derived(studio.selection.length > 1)
@@ -28,6 +28,8 @@
   }
   let isMedia = $derived(clip?.type === 'media')
   let isText = $derived(isTextual(clip))
+  let isEffect = $derived(clip?.type === 'effect')
+  let effectInfo = $derived(isEffect ? effectMeta(clip.effect) : null)
   let asset = $derived(isMedia ? assets.find((a) => a.id === clip.assetId) : null)
   let entry = $derived.by(() => {
     revision
@@ -224,6 +226,36 @@
               <input type="color" value={clip.color} oninput={(e) => set('color', e.currentTarget.value)} aria-label="Custom color" />
             </label>
           </div>
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  {#if isEffect}
+    <section class="ins-card">
+      {@render head('effect', effectInfo?.packLabel || 'Effect')}
+      {#if open.effect}
+        <div class="ins-body">
+          <div class="ins-file">
+            <div class="ins-file-copy">
+              <strong>{effectInfo?.label || clip.name || 'Effect'}</strong>
+              <span>Covers the whole frame</span>
+            </div>
+          </div>
+          <label class="ins-slider">
+            <span>Amount</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={clip.amount ?? 70}
+              style:--fill={fill(clip.amount ?? 70, 0, 100)}
+              oninput={(e) => set('amount', Number(e.currentTarget.value))}
+            />
+            <em>{clip.amount ?? 70}</em>
+          </label>
+          <p class="ins-note">Amount changes how strong this overlay is. Select it on the timeline. Clicks on the canvas pass through to the picture underneath.</p>
         </div>
       {/if}
     </section>

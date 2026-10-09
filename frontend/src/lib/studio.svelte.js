@@ -6,6 +6,7 @@ import {
   W,
   clipEnd,
   findClip,
+  effectClip,
   mediaClip,
   newProject,
   newTrack,
@@ -221,6 +222,22 @@ export class Studio {
     return clip
   }
 
+  // addEffect puts a full-frame overlay on a new top track at the playhead.
+  addEffect(effectId) {
+    const start = this.time >= this.duration ? 0 : this.time
+    const span = this.duration > start ? this.duration - start : 5
+    const room = this.room(start)
+    if (room < MIN_CLIP) throw new Error(`Projects are limited to ${this.limits.maxSeconds} seconds.`)
+    const clip = effectClip(effectId, round(start), round(Math.min(Math.max(span, 2), room)))
+    this.edit((p) => {
+      const track = newTrack()
+      track.clips.push(clip)
+      p.tracks.push(track)
+    })
+    this.selectedId = clip.id
+    return clip
+  }
+
   addText(preset, at = null) {
     const start = this.time >= this.duration ? 0 : this.time
     const span = this.duration > start ? this.duration - start : 5
@@ -342,8 +359,8 @@ export class Studio {
     if (new Set(found.map((f) => f.trackIndex)).size > 1) return { ok: false, reason: 'Clips have to be on the same track to merge.' }
     const sorted = found.map((f) => f.clip).sort((a, b) => a.start - b.start)
     const first = sorted[0]
-    const same = sorted.every((c) => c.type === first.type && (c.type !== 'media' || c.assetId === first.assetId) && (c.type !== 'text' || c.text === first.text))
-    if (!same) return { ok: false, reason: 'Only pieces of the same picture, video, GIF, or text can merge.' }
+    const same = sorted.every((c) => c.type === first.type && (c.type !== 'media' || c.assetId === first.assetId) && (c.type !== 'text' || c.text === first.text) && (c.type !== 'effect' || c.effect === first.effect))
+    if (!same) return { ok: false, reason: 'Only pieces of the same picture, video, GIF, text, or effect can merge.' }
     const end = clipEnd(sorted.at(-1))
     const members = new Set(sorted.map((c) => c.id))
     const blocked = found[0].track.clips.some((c) => !members.has(c.id) && c.start < end - 1e-3 && clipEnd(c) > first.start + 1e-3)
