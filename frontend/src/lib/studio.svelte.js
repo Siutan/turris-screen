@@ -216,7 +216,7 @@ export class Studio {
     this.edit((p) => {
       const track = newTrack()
       track.clips.push(clip)
-      p.tracks.push(track)
+      p.tracks.unshift(track)
     })
     this.selectedId = clip.id
     return clip
@@ -232,7 +232,7 @@ export class Studio {
     this.edit((p) => {
       const track = newTrack()
       track.clips.push(clip)
-      p.tracks.push(track)
+      p.tracks.unshift(track)
     })
     this.selectedId = clip.id
     return clip
@@ -249,7 +249,7 @@ export class Studio {
     this.edit((p) => {
       const track = newTrack()
       track.clips.push(clip)
-      p.tracks.push(track)
+      p.tracks.unshift(track)
     })
     this.selectedId = clip.id
     return clip
@@ -266,14 +266,15 @@ export class Studio {
       this.edit((p) => {
         const track = newTrack()
         track.clips.push(clip)
-        p.tracks.push(track)
+        p.tracks.unshift(track)
       })
       this.selectedId = clip.id
       return
     }
     this.edit((p) => {
       for (const track of p.tracks) track.clips = track.clips.filter((c) => c.type !== kind)
-      p.tracks = p.tracks.filter((t, i) => i === 0 || t.clips.length)
+      p.tracks = p.tracks.filter((t) => t.clips.length)
+      if (!p.tracks.length) p.tracks.push(newTrack())
     })
     this.#prune()
   }
@@ -504,6 +505,7 @@ export class Studio {
 
   // arrangeTarget finds the track a clip is stacked against when moving it in the given
   // direction ('front', 'forward', 'backward', 'back'). Only clips that share screen time count.
+  // The top timeline row is in front, so lower indexes sit above higher ones.
   arrangeTarget(id, where) {
     const found = findClip(this.project, id)
     if (!found) return null
@@ -512,12 +514,12 @@ export class Studio {
     this.project.tracks.forEach((track, j) => {
       if (j !== trackIndex && collides(track, clip)) stacked.push(j)
     })
-    const above = stacked.filter((j) => j > trackIndex)
-    const below = stacked.filter((j) => j < trackIndex)
-    if (where === 'front' && above.length) return { anchor: Math.max(...above), dir: 1 }
-    if (where === 'forward' && above.length) return { anchor: Math.min(...above), dir: 1 }
-    if (where === 'backward' && below.length) return { anchor: Math.max(...below), dir: -1 }
-    if (where === 'back' && below.length) return { anchor: Math.min(...below), dir: -1 }
+    const above = stacked.filter((j) => j < trackIndex)
+    const below = stacked.filter((j) => j > trackIndex)
+    if (where === 'front' && above.length) return { anchor: Math.min(...above), dir: -1 }
+    if (where === 'forward' && above.length) return { anchor: Math.max(...above), dir: -1 }
+    if (where === 'backward' && below.length) return { anchor: Math.min(...below), dir: 1 }
+    if (where === 'back' && below.length) return { anchor: Math.max(...below), dir: 1 }
     return null
   }
 
@@ -528,9 +530,9 @@ export class Studio {
   // arrange restacks clips by moving each to the track just past its anchor, adding one
   // if needed. Clips nearest the destination go first so a group keeps its order.
   arrange(ids, where) {
-    const up = where === 'front' || where === 'forward'
+    const towardFront = where === 'front' || where === 'forward'
     const order = this.#targets(ids)
-      .sort((a, b) => (up ? b.trackIndex - a.trackIndex : a.trackIndex - b.trackIndex))
+      .sort((a, b) => (towardFront ? a.trackIndex - b.trackIndex : b.trackIndex - a.trackIndex))
       .map((f) => f.clip.id)
     if (!order.some((id) => this.arrangeTarget(id, where))) return false
     this.edit((p) => {
@@ -624,22 +626,22 @@ export class Studio {
     this.#settle(id)
   }
 
-  // #settle moves a clip that overlaps another on its track onto a new track just above it.
+  // #settle moves a clip that overlaps another on its track onto the track just above it,
+  // so the clip stays in front. A new row is inserted when the row above is full.
   #settle(id) {
     const found = findClip(this.project, id)
     if (!found) return
     const { clip, track, trackIndex, index } = found
     if (!collides(track, clip)) return
     track.clips.splice(index, 1)
-    const next = this.project.tracks[trackIndex + 1]
-    const fits = next && !collides(next, clip)
-    if (fits) {
-      next.clips.push(clip)
+    const above = trackIndex > 0 ? this.project.tracks[trackIndex - 1] : null
+    if (above && !collides(above, clip)) {
+      above.clips.push(clip)
       return
     }
     const track2 = newTrack()
     track2.clips.push(clip)
-    this.project.tracks.splice(trackIndex + 1, 0, track2)
+    this.project.tracks.splice(trackIndex, 0, track2)
   }
 }
 

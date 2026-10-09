@@ -226,14 +226,16 @@ export function projectDuration(project) {
 }
 
 // activeClips lists what is on screen at t, bottom layer first.
+// The top timeline row is in front, so the last track is painted first.
 export function activeClips(project, t) {
   const out = []
-  project.tracks.forEach((track, trackIndex) => {
-    if (track.hidden) return
+  for (let trackIndex = project.tracks.length - 1; trackIndex >= 0; trackIndex--) {
+    const track = project.tracks[trackIndex]
+    if (track.hidden) continue
     for (const clip of track.clips) {
       if (t >= clip.start && t < clipEnd(clip)) out.push({ clip, track, trackIndex })
     }
-  })
+  }
   return out
 }
 
