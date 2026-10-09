@@ -1,5 +1,6 @@
 <script>
   import { EFFECT_PACKS, TEXT_PRESETS, widgetText } from '../lib/project.js'
+  import { tooltip } from '../lib/tooltip.js'
   import ContextMenu from './ContextMenu.svelte'
 
   let {
@@ -110,7 +111,7 @@
 <aside class="st-library">
 <nav class="rail" aria-label="Editor tools">
   {#each [{ id: 'media', label: 'Media' }, { id: 'text', label: 'Text' }, { id: 'widget', label: 'Widget' }, { id: 'effect', label: 'Effects' }] as item (item.id)}
-    <button class="rail-btn" class:on={view === item.id} onclick={() => (view = item.id)} aria-pressed={view === item.id}>
+    <button class="rail-btn" class:on={view === item.id} use:tooltip={item.label} onclick={() => (view = item.id)} aria-pressed={view === item.id} aria-label={item.label}>
       <span class="rail-icon" aria-hidden="true">
         {#if item.id === 'media'}
           <svg viewBox="0 0 20 20"><rect x="3" y="3.5" width="14" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M5.5 14l3.4-3.6 2.3 2.3 1.8-1.8 2.2 3.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /><circle cx="13" cy="7.3" r="1.2" fill="currentColor" /></svg>
@@ -122,7 +123,6 @@
           <svg viewBox="0 0 20 20"><path d="M10 2.2l1.5 4.6 4.8.2-3.8 2.9 1.4 4.6L10 11.8 6.1 14.5l1.4-4.6L3.7 7l4.8-.2z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg>
         {/if}
       </span>
-      {item.label}
     </button>
   {/each}
 </nav>

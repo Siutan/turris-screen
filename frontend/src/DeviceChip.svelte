@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
 
-  let { status, working = false, onConnect, onRestart } = $props()
+  let { status, working = false, compact = false, onConnect, onRestart } = $props()
   let open = $state(false)
   let root = $state(null)
 
@@ -41,6 +41,7 @@
 <div class="device-wrap nodrag" bind:this={root}>
   <button
     class="device"
+    class:compact
     onclick={toggle}
     disabled={working && !status.connected}
     aria-expanded={open}
@@ -53,13 +54,20 @@
         <path d="M13 25.2h10" stroke="#c5c9d1" stroke-width="1.8" stroke-linecap="round" />
       </svg>
     </span>
-    <span class="device-copy">
-      <strong>TRYX TURRIS 620</strong>
+    {#if compact}
       <span class="state">
         <i class="dot" class:on={status.connected}></i>
         <span class="state-text">{status.connected ? 'Connected' : 'Not connected'}</span>
       </span>
-    </span>
+    {:else}
+      <span class="device-copy">
+        <strong>TRYX TURRIS 620</strong>
+        <span class="state">
+          <i class="dot" class:on={status.connected}></i>
+          <span class="state-text">{status.connected ? 'Connected' : 'Not connected'}</span>
+        </span>
+      </span>
+    {/if}
   </button>
   {#if open}
     <div class="menu device-menu">

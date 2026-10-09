@@ -246,6 +246,5 @@
     <button class="pv-icon" onclick={toggleFull} aria-label="Full screen preview">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
     </button>
-    <span class="pv-res" title="The cooler’s screen">1280 × 720</span>
   </div>
 </div>
