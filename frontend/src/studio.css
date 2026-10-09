@@ -989,6 +989,21 @@
   color: var(--ink-3);
 }
 
+.ins-slider.fx { grid-template-columns: 96px 1fr 32px; }
+
+.ins-reset {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ins-reset:hover { color: var(--ink); }
+
 .ins-slider input { width: 100%; }
 
 .ins-slider em { font-style: normal; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }

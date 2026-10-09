@@ -218,6 +218,11 @@ export const TEXT_PRESETS = [
 ]
 
 // Built-in overlay packs. The painter in effects.js maps each id to Pixi filters.
+// Slider defaults recreate the old Amount 70 look. `legacy` controls follow a saved
+// Amount value until the clip stores its own settings. Speed, size, length, angle,
+// and opacity stay put, because Amount never drove them.
+const control = (id, label, def, legacy = false) => ({ id, label, def, legacy })
+
 export const EFFECT_PACKS = [
   {
     id: 'weather',
@@ -244,12 +249,113 @@ export const EFFECT_PACKS = [
   },
 ]
 
+export const EFFECT_CONTROLS = {
+  snow: [
+    control('density', 'Density', 70, true),
+    control('speed', 'Speed', 50),
+    control('size', 'Size', 50),
+    control('opacity', 'Opacity', 100),
+  ],
+  rain: [
+    control('density', 'Density', 70, true),
+    control('speed', 'Speed', 50),
+    control('length', 'Length', 50),
+    control('angle', 'Angle', 50),
+    control('opacity', 'Opacity', 100),
+  ],
+  storm: [
+    control('density', 'Density', 70, true),
+    control('speed', 'Speed', 50),
+    control('angle', 'Angle', 50),
+    control('darkness', 'Darkness', 60, true),
+    control('lightning', 'Lightning', 80, true),
+    control('flash', 'Bolt rate', 50),
+  ],
+  fog: [
+    control('density', 'Density', 70, true),
+    control('speed', 'Speed', 50),
+    control('blur', 'Blur', 70, true),
+    control('haze', 'Haze', 75, true),
+  ],
+  sun: [
+    control('rays', 'Rays', 76, true),
+    control('speed', 'Speed', 50),
+    control('warmth', 'Warmth', 70, true),
+  ],
+  blizzard: [
+    control('density', 'Density', 70, true),
+    control('speed', 'Speed', 50),
+    control('size', 'Size', 50),
+    control('whiteout', 'Whiteout', 70, true),
+  ],
+  glitch: [
+    control('offset', 'Offset', 66, true),
+    control('slices', 'Slices', 60, true),
+    control('split', 'Color split', 64, true),
+    control('speed', 'Speed', 50),
+  ],
+  duotone: [
+    control('color', 'Color', 90, true),
+    control('wave', 'Wave', 72, true),
+    control('speed', 'Speed', 50),
+  ],
+  vhs: [
+    control('scanlines', 'Scanlines', 63, true),
+    control('noise', 'Noise', 70, true),
+    control('scratches', 'Scratches', 67, true),
+    control('curve', 'Curve', 70, true),
+    control('speed', 'Speed', 50),
+  ],
+  signal: [
+    control('blocks', 'Blocks', 67, true),
+    control('noise', 'Noise', 67, true),
+    control('breakup', 'Breakup', 64, true),
+    control('speed', 'Speed', 50),
+  ],
+  prism: [
+    control('split', 'Split', 65, true),
+    control('color', 'Color', 61, true),
+    control('speed', 'Speed', 50),
+  ],
+}
+
 export function effectMeta(id) {
   for (const pack of EFFECT_PACKS) {
     const effect = pack.effects.find((item) => item.id === id)
     if (effect) return { ...effect, packId: pack.id, packLabel: pack.label }
   }
   return null
+}
+
+export function effectControls(id) {
+  return EFFECT_CONTROLS[id] || []
+}
+
+export function effectDefaults(id) {
+  const settings = {}
+  for (const item of effectControls(id)) settings[item.id] = item.def
+  return settings
+}
+
+function clampUnit(value) {
+  return Math.min(100, Math.max(0, value))
+}
+
+// effectSettings resolves every slider for a clip. Saved settings win. Older clips
+// that only have Amount scale the controls Amount used to drive, and leave the rest
+// at their defaults so a dimmed effect does not also change speed or size.
+export function effectSettings(clip) {
+  const controls = effectControls(clip?.effect)
+  const stored = clip?.settings && typeof clip.settings === 'object' ? clip.settings : null
+  const amount = Number.isFinite(clip?.amount) ? clip.amount : null
+  const settings = {}
+  for (const item of controls) {
+    const raw = stored?.[item.id]
+    if (Number.isFinite(raw)) settings[item.id] = clampUnit(raw)
+    else if (amount != null && item.legacy) settings[item.id] = clampUnit(Math.round((item.def * amount) / 70))
+    else settings[item.id] = item.def
+  }
+  return settings
 }
 
 export const TIME_FORMATS = [
@@ -321,7 +427,7 @@ export function effectClip(effectId, start, duration) {
     name: meta?.label || 'Effect',
     start,
     duration,
-    amount: 70,
+    settings: effectDefaults(effectId),
   }
 }
 
