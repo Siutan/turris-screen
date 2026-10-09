@@ -21,7 +21,7 @@ func main() {
 		Title:     "Turris Studio",
 		Width:     1440,
 		Height:    920,
-		MinWidth:  1180,
+		MinWidth:  1280,
 		MinHeight: 760,
 		Frameless: true,
 		AssetServer: &assetserver.Options{
