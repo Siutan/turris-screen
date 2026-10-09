@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { Apply, Connect, GetLibrary, Job, Remove, RestartCooler, ShowImage } from '../wailsjs/go/main/App.js'
+  import { ActiveName, Apply, Connect, GetLibrary, Job, Remove, RestartCooler, ShowImage } from '../wailsjs/go/main/App.js'
   import { EventsOn, Quit, WindowMinimise, WindowToggleMaximise } from '../wailsjs/runtime/runtime.js'
 
   let status = $state({
@@ -9,11 +9,17 @@
     detail: 'Looking for the cooler…',
   })
   let library = $state([])
+  let activeName = $state('')
   let error = $state('')
   let working = $state(false)
   let job = $state({ active: false, label: '', percent: 0 })
   let hideTimer
   let jobWatch = 0
+  let view = $state('home')
+  let filter = $state('all')
+  let query = $state('')
+  let sort = $state('recent')
+  let menu = $state(null)
   let title = $state('')
   let zoom = $state(1)
   let source = $state(null)
@@ -30,6 +36,14 @@
 
   let frame = $state(null)
   let picker = $state(null)
+
+  const filters = [
+    { id: 'all', label: 'All' },
+    { id: 'image', label: 'Images' },
+    { id: 'video', label: 'Videos' },
+    { id: 'gif', label: 'GIFs' },
+    { id: 'widget', label: 'Widgets' },
+  ]
 
   function cover() {
     if (!source || !frameW || !frameH) return 1
@@ -119,9 +133,61 @@
     return typeof window !== 'undefined' && !!window.go?.main?.App
   }
 
+  function kindOf(item) {
+    return item.kind || 'image'
+  }
+
+  function kindLabel(kind) {
+    if (kind === 'gif') return 'GIF'
+    if (kind === 'video') return 'Video'
+    if (kind === 'widget') return 'Widget'
+    return 'Image'
+  }
+
+  async function settle() {
+    if (!hasBridge()) return
+    try {
+      status = await Connect()
+      const shown = activeName
+      await refreshLibrary()
+      await refreshActive()
+      if (!activeName && shown) activeName = shown
+    } catch (err) {
+      if (!error) error = message(err)
+    }
+  }
+
+  function editedLabel(created) {
+    const match = String(created || '').match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4})/)
+    if (!match) return created ? `Edited ${created}` : 'Edited'
+    return `Edited ${match[2]} ${Number(match[1])}, ${match[3]}`
+  }
+
+  function clearDraft() {
+    if (objectURL) URL.revokeObjectURL(objectURL)
+    objectURL = ''
+    source = null
+    title = ''
+    zoom = 1
+    offsetX = 0
+    offsetY = 0
+  }
+
   async function refreshLibrary() {
     if (!hasBridge()) return
     library = (await GetLibrary()) ?? []
+  }
+
+  async function refreshActive() {
+    if (!hasBridge() || !status.connected) {
+      activeName = ''
+      return
+    }
+    try {
+      activeName = (await ActiveName()) || ''
+    } catch {
+      activeName = ''
+    }
   }
 
   async function connect() {
@@ -135,6 +201,7 @@
       return
     }
     status = await Connect()
+    if (status.connected) await refreshActive()
   }
 
   async function show() {
@@ -148,19 +215,22 @@
     applyProgress({ active: true, label: 'Encoding image', percent: 4 })
     const stopWatch = watchJob()
     try {
-      await ShowImage(title, exportPNG())
-      await refreshLibrary()
+      const item = await ShowImage(title, exportPNG())
+      clearDraft()
+      view = 'home'
+      if (item?.remoteName) activeName = item.remoteName
     } catch (err) {
       error = message(err)
       applyProgress({ active: false })
     } finally {
       stopWatch()
       working = false
-      status = await Connect()
+      await settle()
     }
   }
 
   async function applyItem(id) {
+    menu = null
     if (working) return
     working = true
     error = ''
@@ -174,17 +244,19 @@
     } finally {
       stopWatch()
       working = false
-      status = await Connect()
+      await settle()
     }
   }
 
   async function restartCooler() {
+    menu = null
     if (working || !hasBridge()) return
     working = true
     error = ''
     applyProgress({ active: true, label: 'Restarting the cooler', percent: 30 })
     try {
       status = await RestartCooler()
+      await refreshActive()
     } catch (err) {
       error = message(err)
       status = await Connect()
@@ -195,14 +267,56 @@
   }
 
   async function removeItem(id) {
+    menu = null
     if (working) return
     error = ''
     try {
       await Remove(id)
       await refreshLibrary()
+      await refreshActive()
     } catch (err) {
       error = message(err)
     }
+  }
+
+  function openEditor() {
+    menu = null
+    error = ''
+    view = 'edit'
+  }
+
+  function goHome() {
+    error = ''
+    view = 'home'
+  }
+
+  function onDevice(event) {
+    event.stopPropagation()
+    if (working) return
+    if (!status.connected) {
+      menu = null
+      connect().catch((err) => {
+        error = message(err)
+      })
+      return
+    }
+    menu = menu?.type === 'device' ? null : { type: 'device' }
+  }
+
+  function toggleCardMenu(id, event) {
+    event.stopPropagation()
+    menu = menu?.type === 'card' && menu.id === id ? null : { type: 'card', id }
+  }
+
+  function toggleSort(event) {
+    event.stopPropagation()
+    menu = menu?.type === 'sort' ? null : { type: 'sort' }
+  }
+
+  function chooseSort(next, event) {
+    event.stopPropagation()
+    sort = next
+    menu = null
   }
 
   function pointerDown(event) {
@@ -281,6 +395,65 @@
     clamp()
   }
 
+  let activeItem = $derived(library.find((item) => item.remoteName && item.remoteName === activeName) ?? null)
+
+  let hero = $derived.by(() => {
+    if (activeItem) {
+      return {
+        kicker: 'Now showing',
+        title: activeItem.name,
+        meta: `${kindLabel(kindOf(activeItem))} · ${editedLabel(activeItem.created)}`,
+        thumb: activeItem.thumb,
+      }
+    }
+    if (!status.connected) {
+      return {
+        kicker: 'On the cooler',
+        title: 'Not connected',
+        meta: status.detail || 'Connect to see what the screen is showing.',
+        thumb: '',
+      }
+    }
+    if (activeName) {
+      return {
+        kicker: 'On the cooler',
+        title: 'Something else is showing',
+        meta: 'The screen is playing media from outside your projects.',
+        thumb: '',
+      }
+    }
+    return {
+      kicker: 'On the cooler',
+      title: 'Nothing showing',
+      meta: 'Send a project and it will stay on the screen.',
+      thumb: '',
+    }
+  })
+
+  let visible = $derived.by(() => {
+    const q = query.trim().toLowerCase()
+    let items = library.filter((item) => {
+      if (filter !== 'all' && kindOf(item) !== filter) return false
+      if (q && !String(item.name || '').toLowerCase().includes(q)) return false
+      return true
+    })
+    if (sort === 'name') {
+      items = [...items].sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    }
+    return items
+  })
+
+  let emptyCopy = $derived.by(() => {
+    if (query.trim()) return 'No projects match that search.'
+    if (filter === 'video') return 'No videos yet.'
+    if (filter === 'gif') return 'No GIFs yet.'
+    if (filter === 'widget') return 'No widgets yet.'
+    if (filter === 'image') return 'No images yet.'
+    return 'Projects you create will show up here.'
+  })
+
+  let sortLabel = $derived(sort === 'name' ? 'Name' : 'Recently Edited')
+
   onMount(() => {
     let stop = () => {}
     try {
@@ -290,17 +463,15 @@
     } catch {
       stop = () => {}
     }
-    const observer = new ResizeObserver(() => {
-      const prevW = frameW
-      const prevH = frameH
-      measure()
-      if (source && (prevW === 0 || prevH === 0)) centerImage()
-      else clamp()
-    })
-    if (frame) {
-      observer.observe(frame)
-      frame.addEventListener('wheel', onWheel, { passive: false })
+    const closeMenu = (event) => {
+      if (event.target instanceof Element && event.target.closest('.menu')) return
+      menu = null
     }
+    const onKey = (event) => {
+      if (event.key === 'Escape') menu = null
+    }
+    document.addEventListener('click', closeMenu)
+    document.addEventListener('keydown', onKey)
     connect()
       .then(refreshLibrary)
       .catch((err) => {
@@ -308,42 +479,46 @@
       })
     return () => {
       if (typeof stop === 'function') stop()
-      observer.disconnect()
-      frame?.removeEventListener('wheel', onWheel)
+      document.removeEventListener('click', closeMenu)
+      document.removeEventListener('keydown', onKey)
       if (objectURL) URL.revokeObjectURL(objectURL)
+    }
+  })
+
+  $effect(() => {
+    const node = frame
+    if (!node) return
+    const observer = new ResizeObserver(() => {
+      const prevW = frameW
+      const prevH = frameH
+      measure()
+      if (source && (prevW === 0 || prevH === 0)) centerImage()
+      else clamp()
+    })
+    observer.observe(node)
+    node.addEventListener('wheel', onWheel, { passive: false })
+    const tick = requestAnimationFrame(() => {
+      const prevW = frameW
+      const prevH = frameH
+      measure()
+      if (source && (prevW === 0 || prevH === 0)) centerImage()
+      else clamp()
+    })
+    return () => {
+      cancelAnimationFrame(tick)
+      observer.disconnect()
+      node.removeEventListener('wheel', onWheel)
     }
   })
 </script>
 
 <div class="app">
-  <header class="titlebar" role="toolbar" aria-label="Turris Screen" tabindex="-1" ondblclick={onTitleDblClick}>
-    {#if job.active}
-      <div class="wash" style:width="{job.percent}%"></div>
-      <div class="meter" aria-hidden="true"><span style:width="{job.percent}%"></span></div>
-    {/if}
-    <h1>TURRIS SCREEN</h1>
+  <header class="chrome" role="toolbar" aria-label="Window" tabindex="-1" ondblclick={onTitleDblClick}>
     {#if job.active}
       <p class="job">{job.label} <em>{Math.round(job.percent)}%</em></p>
+      <div class="meter" aria-hidden="true"><span style:width="{job.percent}%"></span></div>
     {/if}
     <div class="spacer"></div>
-    <div class="pill nodrag">
-      <span class="dot" class:on={status.connected}></span>
-      {#if status.connected}
-        {status.serial}
-      {:else}
-        {status.detail || 'Not connected'}
-      {/if}
-    </div>
-    {#if !status.connected}
-      <button class="nodrag" onclick={connect} disabled={working}>Connect</button>
-    {:else}
-      <button
-        class="nodrag"
-        onclick={restartCooler}
-        disabled={working}
-        title="Restarts the cooler’s screen. Use this if the background stops changing."
-      >Restart cooler</button>
-    {/if}
     <div class="wins nodrag">
       <button class="winbtn" aria-label="Minimise" onclick={() => windowAction(WindowMinimise)}>−</button>
       <button class="winbtn" aria-label="Maximise" onclick={() => windowAction(WindowToggleMaximise)}>□</button>
@@ -351,111 +526,268 @@
     </div>
   </header>
 
-  <div class="workspace">
-    <section class="stage">
-      <div
-        class="frame"
-        class:ready={!!source}
-        role="application"
-        aria-label="Crop to the cooler screen"
-        bind:this={frame}
-        onpointerdown={pointerDown}
-        onpointermove={pointerMove}
-        onpointerup={pointerUp}
-        onpointercancel={pointerUp}
-        ondragover={(event) => event.preventDefault()}
-        ondrop={(event) => {
-          event.preventDefault()
-          loadFile(event.dataTransfer?.files?.[0])
-        }}
-      >
-        {#if source}
-          <img
-            alt=""
-            src={objectURL}
-            draggable="false"
-            style:width="{source.naturalWidth * scaled()}px"
-            style:height="{source.naturalHeight * scaled()}px"
-            style:transform="translate({offsetX}px, {offsetY}px)"
-          />
-        {:else}
-          <div class="empty">
-            <div>
-              <strong>Drop a picture here</strong>
-              <div>The frame is the cooler’s 1280×720 screen.</div>
+  <div class="shell">
+    {#if view === 'home'}
+      <div class="topbar" role="banner" tabindex="-1" ondblclick={onTitleDblClick}>
+        <div class="brand">
+          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+            <g fill="currentColor">
+              <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(0 16 16)" />
+              <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(120 16 16)" />
+              <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(240 16 16)" />
+              <circle cx="16" cy="16" r="2.5" />
+            </g>
+          </svg>
+          Turris Studio
+        </div>
+        <div class="device-wrap nodrag">
+          <button
+            class="device"
+            onclick={onDevice}
+            disabled={working && !status.connected}
+            aria-expanded={menu?.type === 'device'}
+            title={status.connected ? status.serial || 'Connected' : status.detail}
+          >
+            <span class="device-icon" aria-hidden="true">
+              <svg viewBox="0 0 36 28">
+                <rect x="1.2" y="2" width="33.6" height="20" rx="4" fill="#f4f5f7" stroke="#d5d8de" />
+                <rect x="4.2" y="5" width="27.6" height="12.2" rx="2" fill="#d7dbe2" />
+                <path d="M13 25.2h10" stroke="#c5c9d1" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <span class="device-copy">
+              <strong>TRYX TURRIS 620</strong>
+              <span class="state">
+                <i class="dot" class:on={status.connected}></i>
+                <span class="state-text">
+                  {status.connected ? 'Connected' : 'Not connected'}
+                </span>
+              </span>
+            </span>
+          </button>
+          {#if menu?.type === 'device'}
+            <div class="menu device-menu">
+              {#if status.serial}
+                <p class="hint">{status.serial}</p>
+              {/if}
+              <button onclick={restartCooler} disabled={working} title="Restarts the cooler’s screen if the background stops changing.">
+                Restart cooler
+              </button>
             </div>
+          {/if}
+        </div>
+      </div>
+
+      {#if error}
+        <p class="banner">{error}</p>
+      {/if}
+
+      <section class="hero" aria-label="On the cooler">
+        <div class="hero-copy">
+          <p class="kicker">{hero.kicker}</p>
+          <h2>{hero.title}</h2>
+          <p class="meta">{hero.meta}</p>
+        </div>
+        <div class="hero-visual">
+          {#if hero.thumb}
+            <img class="preview" alt="" src={hero.thumb} />
+          {:else}
+            <div class="preview placeholder" aria-hidden="true">
+              <svg viewBox="0 0 48 32">
+                <rect x="1" y="1" width="46" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <path d="M8 23l8-8 6 6 6-7 12 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+              </svg>
+            </div>
+          {/if}
+        </div>
+      </section>
+
+      <section class="projects" aria-label="Your projects">
+        <div class="projects-head">
+          <div>
+            <h2>Your Projects</h2>
+            <p>Manage and edit your display content.</p>
+          </div>
+          <div class="projects-tools">
+            <label class="search">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.25" fill="none" stroke="currentColor" stroke-width="1.4" />
+                <path d="M10.4 10.4L13.5 13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search projects..."
+                bind:value={query}
+                aria-label="Search projects"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <button class="add" onclick={openEditor} disabled={working}>
+              <svg viewBox="0 0 14 14" aria-hidden="true">
+                <path d="M7 1.6v10.8M1.6 7h10.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              Add New
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="chips" role="tablist" aria-label="Project type">
+            {#each filters as item (item.id)}
+              <button
+                class="chip"
+                class:on={filter === item.id}
+                role="tab"
+                aria-selected={filter === item.id}
+                onclick={() => (filter = item.id)}
+              >{item.label}</button>
+            {/each}
+          </div>
+          <div class="sort">
+            <button class="sort-btn" onclick={toggleSort} aria-expanded={menu?.type === 'sort'}>
+              {sortLabel}
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M2.4 4.4L6 8l3.6-3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            {#if menu?.type === 'sort'}
+              <div class="menu sort-menu">
+                <button class:on={sort === 'recent'} onclick={(event) => chooseSort('recent', event)}>Recently Edited</button>
+                <button class:on={sort === 'name'} onclick={(event) => chooseSort('name', event)}>Name</button>
+              </div>
+            {/if}
+          </div>
+        </div>
+
+        {#if visible.length === 0}
+          <p class="empty-note">{emptyCopy}</p>
+        {:else}
+          <div class="grid">
+            {#each visible as item (item.id)}
+              <article class="card">
+                <div class="shot">
+                  {#if item.thumb}
+                    <img alt="" src={item.thumb} />
+                  {:else}
+                    <div class="shot-fallback"></div>
+                  {/if}
+                  <span class="badge">{kindLabel(kindOf(item))}</span>
+                  <button class="more" aria-label="Actions for {item.name}" aria-expanded={menu?.type === 'card' && menu.id === item.id} onclick={(event) => toggleCardMenu(item.id, event)}>
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <circle cx="3.2" cy="8" r="1.15" fill="currentColor" />
+                      <circle cx="8" cy="8" r="1.15" fill="currentColor" />
+                      <circle cx="12.8" cy="8" r="1.15" fill="currentColor" />
+                    </svg>
+                  </button>
+                </div>
+                {#if menu?.type === 'card' && menu.id === item.id}
+                  <div class="menu card-menu">
+                    <button onclick={() => applyItem(item.id)} disabled={working || !status.connected}>Show on cooler</button>
+                    <button class="danger" onclick={() => removeItem(item.id)} disabled={working}>Remove</button>
+                  </div>
+                {/if}
+                <h3>{item.name}</h3>
+                <p>{editedLabel(item.created)}</p>
+              </article>
+            {/each}
           </div>
         {/if}
-      </div>
+      </section>
+    {:else}
+      <div class="editor">
+        <div class="editor-head">
+          <button class="back" onclick={goHome}>
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M7.6 2.4L4 6l3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Projects
+          </button>
+          <div>
+            <h2>New picture</h2>
+            <p>Crop it to the cooler’s screen, then send it.</p>
+          </div>
+        </div>
 
-      <div class="controls">
-        <label class="zoom">
-          Zoom
+        <div
+          class="frame"
+          class:ready={!!source}
+          role="application"
+          aria-label="Crop to the cooler screen"
+          bind:this={frame}
+          onpointerdown={pointerDown}
+          onpointermove={pointerMove}
+          onpointerup={pointerUp}
+          onpointercancel={pointerUp}
+          ondragover={(event) => event.preventDefault()}
+          ondrop={(event) => {
+            event.preventDefault()
+            loadFile(event.dataTransfer?.files?.[0])
+          }}
+        >
+          {#if source}
+            <img
+              alt=""
+              src={objectURL}
+              draggable="false"
+              style:width="{source.naturalWidth * scaled()}px"
+              style:height="{source.naturalHeight * scaled()}px"
+              style:transform="translate({offsetX}px, {offsetY}px)"
+            />
+          {:else}
+            <div class="drop">
+              <strong>Drop a picture here</strong>
+              <span>This frame is the cooler’s 1280×720 screen.</span>
+            </div>
+          {/if}
+        </div>
+
+        <div class="controls">
+          <label class="zoom">
+            Zoom
+            <input
+              type="range"
+              min="1"
+              max="4"
+              step="0.01"
+              value={zoom}
+              disabled={!source}
+              oninput={(event) => {
+                zoom = Number(event.currentTarget.value)
+                clamp()
+              }}
+            />
+          </label>
+          <div class="actions">
+            <button class="btn" onclick={() => picker?.click()}>Choose picture</button>
+            <button class="btn" onclick={centerImage} disabled={!source}>Reset crop</button>
+          </div>
           <input
-            type="range"
-            min="1"
-            max="4"
-            step="0.01"
-            value={zoom}
+            type="text"
+            placeholder="Name in the library"
+            bind:value={title}
             disabled={!source}
-            oninput={(event) => {
-              zoom = Number(event.currentTarget.value)
-              clamp()
-            }}
           />
-        </label>
-        <div class="actions">
-          <button onclick={() => picker?.click()}>Choose picture</button>
-          <button onclick={centerImage} disabled={!source}>Reset crop</button>
+          <button class="add send" onclick={show} disabled={!source || working || !status.connected}>
+            Show on cooler
+          </button>
         </div>
         <input
-          type="text"
-          placeholder="Name in the library"
-          bind:value={title}
-          disabled={!source}
+          bind:this={picker}
+          type="file"
+          accept="image/*"
+          hidden
+          onchange={(event) => {
+            loadFile(event.currentTarget.files?.[0])
+            event.currentTarget.value = ''
+          }}
         />
-        <button class="primary" onclick={show} disabled={!source || working || !status.connected}>
-          Show on cooler
-        </button>
+        {#if error}
+          <p class="banner">{error}</p>
+        {:else}
+          <p class="note">Drag to move the picture. Scroll or use the slider to zoom. Quit KANALI before connecting; it uses the same bridge.</p>
+        {/if}
       </div>
-      <input
-        bind:this={picker}
-        type="file"
-        accept="image/*"
-        hidden
-        onchange={(event) => {
-          loadFile(event.currentTarget.files?.[0])
-          event.currentTarget.value = ''
-        }}
-      />
-      {#if error}
-        <p class="error">{error}</p>
-      {:else}
-        <p class="note">Drag to move the picture. Scroll or use the slider to zoom. Quit KANALI before connecting; it uses the same bridge.</p>
-      {/if}
-    </section>
-
-    <aside class="library">
-      <h2>Library</h2>
-      {#if library.length === 0}
-        <p class="blank">Pictures you show on the cooler stay here, so you can put one back on screen without cropping it again.</p>
-      {:else}
-        <div class="grid">
-          {#each library as item (item.id)}
-            <article class="card">
-              <img alt="" src={item.thumb} />
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.created}</p>
-                <div class="row">
-                  <button onclick={() => applyItem(item.id)} disabled={working || !status.connected}>Show</button>
-                  <button class="danger" onclick={() => removeItem(item.id)} disabled={working}>Remove</button>
-                </div>
-              </div>
-            </article>
-          {/each}
-        </div>
-      {/if}
-    </aside>
+    {/if}
   </div>
 </div>

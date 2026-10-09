@@ -62,6 +62,18 @@ func (a *App) GetLibrary() ([]MediaItem, error) {
 	return a.library.List()
 }
 
+// ActiveName is the file the cooler is set to play. Empty when that is unknown.
+func (a *App) ActiveName() string {
+	if !a.bridge.Connected() {
+		return ""
+	}
+	name, ok := a.bridge.ActiveMedia()
+	if !ok {
+		return ""
+	}
+	return name
+}
+
 // ShowImage sends a cropped 1280×720 PNG to the cooler and stores it in the library.
 func (a *App) ShowImage(name, pngBase64 string) (MediaItem, error) {
 	a.opMu.Lock()

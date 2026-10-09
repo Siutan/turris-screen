@@ -3,7 +3,6 @@ module turris-screen
 go 1.25.0
 
 require (
-	github.com/natefinch/npipe v0.0.0-20160621034901-c1b8fa8bdcce
 	github.com/wailsapp/wails/v2 v2.16.0
 	golang.org/x/sys v0.46.0
 )
@@ -36,5 +35,4 @@ require (
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
-	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 )

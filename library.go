@@ -184,9 +184,9 @@ func (l *Library) Renew(id string) (item MediaItem, path, previous string, err e
 	return MediaItem{}, "", "", fmt.Errorf("that image is no longer in the library")
 }
 
-// remoteName is the basename the cooler stores, in KANALI's format.
+// remoteName is the basename the cooler stores.
 func remoteName(t time.Time) string {
-	return strings.ReplaceAll(t.Format("2006-01-02_15-04-05.000"), ".", "-") + ".gif.h264_1280x720"
+	return strings.ReplaceAll(t.Format("2006-01-02_15-04-05.000"), ".", "-") + ".mp4.h264_1280x720"
 }
 
 func (l *Library) Discard(id string) error {

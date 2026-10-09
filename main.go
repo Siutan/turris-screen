@@ -18,16 +18,16 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "Turris Screen",
-		Width:     1180,
-		Height:    780,
-		MinWidth:  960,
-		MinHeight: 640,
+		Title:     "Turris Studio",
+		Width:     1240,
+		Height:    860,
+		MinWidth:  1040,
+		MinHeight: 700,
 		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 16, G: 17, B: 20, A: 1},
+		BackgroundColour: &options.RGBA{R: 232, G: 232, B: 236, A: 1},
 		Windows: &windows.Options{
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,

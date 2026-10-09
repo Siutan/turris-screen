@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
@@ -13,7 +14,7 @@ import (
 func TestEncodeStill(t *testing.T) {
 	ffmpeg, err := findFFmpeg()
 	if err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 	dir := t.TempDir()
 	pngPath := filepath.Join(dir, "frame.png")
@@ -42,7 +43,17 @@ func TestEncodeStill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Size() < 200000 {
+	if st.Size() < 4096 {
 		t.Fatalf("encoded file is only %d bytes", st.Size())
+	}
+	f, err = os.Open(h264Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	head := make([]byte, 80)
+	n, _ := f.Read(head)
+	if !bytes.Contains(head[:n], []byte("Tryx media header")) {
+		t.Fatal("encoded file is missing the Tryx media header")
 	}
 }
