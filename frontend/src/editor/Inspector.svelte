@@ -1,6 +1,6 @@
 <script>
   import SourceRange from './SourceRange.svelte'
-  import { DATE_FORMATS, FILTERS, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
+  import { DATE_FORMATS, FILTERS, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, effectControls, effectDefaults, effectMeta, effectSettings, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
 
   let { studio, sources, assets, revision, onError } = $props()
 
@@ -31,6 +31,8 @@
   let isText = $derived(isTextual(clip))
   let isEffect = $derived(clip?.type === 'effect')
   let effectInfo = $derived(isEffect ? effectMeta(clip.effect) : null)
+  let effectOpts = $derived(isEffect ? effectControls(clip.effect) : [])
+  let effectValues = $derived(isEffect ? effectSettings(clip) : null)
   let asset = $derived(isMedia ? assets.find((a) => a.id === clip.assetId) : null)
   let entry = $derived.by(() => {
     revision
@@ -49,6 +51,25 @@
     studio.edit(() => {
       target[key] = value
     }, `${target.id}:${key}`)
+  }
+
+  function setEffect(key, value) {
+    const target = clip
+    const next = { ...effectSettings(target), [key]: value }
+    studio.edit(() => {
+      target.settings = next
+      delete target.amount
+    }, `${target.id}:fx:${key}`)
+  }
+
+  function resetEffect(key) {
+    const target = clip
+    const defaults = effectDefaults(target.effect)
+    const next = key ? { ...effectSettings(target), [key]: defaults[key] } : defaults
+    studio.edit(() => {
+      target.settings = next
+      delete target.amount
+    }, key ? `${target.id}:fx:${key}` : '')
   }
 
   function adjust(key, value) {
@@ -254,20 +275,25 @@
               <span>Covers the whole frame</span>
             </div>
           </div>
-          <label class="ins-slider">
-            <span>Amount</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={clip.amount ?? 70}
-              style:--fill={fill(clip.amount ?? 70, 0, 100)}
-              oninput={(e) => set('amount', Number(e.currentTarget.value))}
-            />
-            <em>{clip.amount ?? 70}</em>
-          </label>
-          <p class="ins-note">Amount changes how strong this overlay is. Select it on the timeline. Clicks on the canvas pass through to the picture underneath.</p>
+          {#each effectOpts as opt (opt.id)}
+            <label class="ins-slider fx">
+              <span>{opt.label}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={effectValues?.[opt.id] ?? 0}
+                style:--fill={fill(effectValues?.[opt.id] ?? 0, 0, 100)}
+                aria-label={opt.label}
+                oninput={(e) => setEffect(opt.id, Number(e.currentTarget.value))}
+                ondblclick={() => resetEffect(opt.id)}
+              />
+              <em>{effectValues?.[opt.id] ?? 0}</em>
+            </label>
+          {/each}
+          <button class="ins-reset" type="button" onclick={() => resetEffect()}>Reset to defaults</button>
+          <p class="ins-note">Zero turns that part off. Speed 50 is the original pace, and 100 is twice as fast. Double-click a slider to reset it. Clicks on the canvas pass through.</p>
         </div>
       {/if}
     </section>
