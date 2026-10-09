@@ -1,7 +1,9 @@
 <script>
   import { onMount } from 'svelte'
-  import { ActiveName, Apply, Connect, GetLibrary, Job, Remove, RestartCooler, ShowImage } from '../wailsjs/go/main/App.js'
+  import { ActiveName, Apply, Connect, GetLibrary, Job, Remove, RestartCooler } from '../wailsjs/go/main/App.js'
   import { EventsOn, Quit, WindowMinimise, WindowToggleMaximise } from '../wailsjs/runtime/runtime.js'
+  import DeviceChip from './DeviceChip.svelte'
+  import Editor from './editor/Editor.svelte'
 
   let status = $state({
     connected: false,
@@ -16,26 +18,12 @@
   let hideTimer
   let jobWatch = 0
   let view = $state('home')
+  let editing = $state('')
+  let editorKey = $state(0)
   let filter = $state('all')
   let query = $state('')
   let sort = $state('recent')
   let menu = $state(null)
-  let title = $state('')
-  let zoom = $state(1)
-  let source = $state(null)
-  let objectURL = $state('')
-  let offsetX = $state(0)
-  let offsetY = $state(0)
-  let frameW = $state(0)
-  let frameH = $state(0)
-  let dragging = false
-  let dragX = 0
-  let dragY = 0
-  let originX = 0
-  let originY = 0
-
-  let frame = $state(null)
-  let picker = $state(null)
 
   const filters = [
     { id: 'all', label: 'All' },
@@ -45,88 +33,10 @@
     { id: 'widget', label: 'Widgets' },
   ]
 
-  function cover() {
-    if (!source || !frameW || !frameH) return 1
-    return Math.max(frameW / source.naturalWidth, frameH / source.naturalHeight)
-  }
-
   function message(err) {
     if (!err) return 'Something went wrong'
     if (typeof err === 'string') return err
     return err.message || String(err)
-  }
-
-  function scaled() {
-    return cover() * Number(zoom)
-  }
-
-  function clamp() {
-    if (!source) return
-    const w = source.naturalWidth * scaled()
-    const h = source.naturalHeight * scaled()
-    const minX = Math.min(0, frameW - w)
-    const minY = Math.min(0, frameH - h)
-    offsetX = Math.min(0, Math.max(minX, offsetX))
-    offsetY = Math.min(0, Math.max(minY, offsetY))
-  }
-
-  function centerImage() {
-    if (!source) return
-    offsetX = (frameW - source.naturalWidth * scaled()) / 2
-    offsetY = (frameH - source.naturalHeight * scaled()) / 2
-    clamp()
-  }
-
-  function measure() {
-    if (!frame) return
-    frameW = frame.clientWidth
-    frameH = frame.clientHeight
-  }
-
-  function loadFile(file) {
-    if (!file || !file.type.startsWith('image/')) {
-      error = 'Choose a picture file.'
-      return
-    }
-    error = ''
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      if (objectURL) URL.revokeObjectURL(objectURL)
-      objectURL = url
-      source = img
-      title = file.name.replace(/\.[^.]+$/, '')
-      zoom = 1
-      requestAnimationFrame(() => {
-        measure()
-        centerImage()
-      })
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      error = 'That picture could not be opened.'
-    }
-    img.src = url
-  }
-
-  function exportPNG() {
-    const canvas = document.createElement('canvas')
-    canvas.width = 1280
-    canvas.height = 720
-    const ctx = canvas.getContext('2d')
-    const s = scaled()
-    ctx.drawImage(
-      source,
-      -offsetX / s,
-      -offsetY / s,
-      frameW / s,
-      frameH / s,
-      0,
-      0,
-      1280,
-      720,
-    )
-    return canvas.toDataURL('image/png')
   }
 
   function hasBridge() {
@@ -157,20 +67,12 @@
     }
   }
 
-  function editedLabel(created) {
-    const match = String(created || '').match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4})/)
-    if (!match) return created ? `Edited ${created}` : 'Edited'
-    return `Edited ${match[2]} ${Number(match[1])}, ${match[3]}`
-  }
-
-  function clearDraft() {
-    if (objectURL) URL.revokeObjectURL(objectURL)
-    objectURL = ''
-    source = null
-    title = ''
-    zoom = 1
-    offsetX = 0
-    offsetY = 0
+  function editedLabel(item) {
+    const match = String(item.created || '').match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4})/)
+    const when = match ? `${match[2]} ${Number(match[1])}, ${match[3]}` : item.created
+    const prefix = item.draft ? 'Draft · edited' : 'Edited'
+    const length = item.duration ? ` · ${Math.round(item.duration)}s` : ''
+    return when ? `${prefix} ${when}${length}` : prefix
   }
 
   async function refreshLibrary() {
@@ -204,31 +106,6 @@
     if (status.connected) await refreshActive()
   }
 
-  async function show() {
-    if (!source || working) return
-    if (!hasBridge()) {
-      error = 'Start the desktop app to send this picture to the cooler.'
-      return
-    }
-    working = true
-    error = ''
-    applyProgress({ active: true, label: 'Encoding image', percent: 4 })
-    const stopWatch = watchJob()
-    try {
-      const item = await ShowImage(title, exportPNG())
-      clearDraft()
-      view = 'home'
-      if (item?.remoteName) activeName = item.remoteName
-    } catch (err) {
-      error = message(err)
-      applyProgress({ active: false })
-    } finally {
-      stopWatch()
-      working = false
-      await settle()
-    }
-  }
-
   async function applyItem(id) {
     menu = null
     if (working) return
@@ -249,7 +126,6 @@
   }
 
   async function restartCooler() {
-    menu = null
     if (working || !hasBridge()) return
     working = true
     error = ''
@@ -279,28 +155,29 @@
     }
   }
 
-  function openEditor() {
+  function openEditor(id = '') {
     menu = null
     error = ''
+    editing = id
+    editorKey++
     view = 'edit'
   }
 
-  function goHome() {
-    error = ''
+  async function closeEditor() {
     view = 'home'
+    editing = ''
+    await settle()
   }
 
-  function onDevice(event) {
-    event.stopPropagation()
-    if (working) return
-    if (!status.connected) {
-      menu = null
-      connect().catch((err) => {
-        error = message(err)
-      })
-      return
-    }
-    menu = menu?.type === 'device' ? null : { type: 'device' }
+  async function onSaved() {
+    await refreshLibrary()
+    await refreshActive()
+  }
+
+  function connectQuietly() {
+    connect().catch((err) => {
+      error = message(err)
+    })
   }
 
   function toggleCardMenu(id, event) {
@@ -317,27 +194,6 @@
     event.stopPropagation()
     sort = next
     menu = null
-  }
-
-  function pointerDown(event) {
-    if (!source) return
-    dragging = true
-    dragX = event.clientX
-    dragY = event.clientY
-    originX = offsetX
-    originY = offsetY
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-
-  function pointerMove(event) {
-    if (!dragging) return
-    offsetX = originX + (event.clientX - dragX)
-    offsetY = originY + (event.clientY - dragY)
-    clamp()
-  }
-
-  function pointerUp() {
-    dragging = false
   }
 
   function applyProgress(update) {
@@ -387,14 +243,6 @@
     windowAction(WindowToggleMaximise)
   }
 
-  function onWheel(event) {
-    if (!source) return
-    event.preventDefault()
-    const next = zoom * (event.deltaY < 0 ? 1.08 : 0.92)
-    zoom = Math.min(4, Math.max(1, next))
-    clamp()
-  }
-
   let activeItem = $derived(library.find((item) => item.remoteName && item.remoteName === activeName) ?? null)
 
   let hero = $derived.by(() => {
@@ -402,7 +250,7 @@
       return {
         kicker: 'Now showing',
         title: activeItem.name,
-        meta: `${kindLabel(kindOf(activeItem))} · ${editedLabel(activeItem.created)}`,
+        meta: `${kindLabel(kindOf(activeItem))} · ${editedLabel(activeItem)}`,
         thumb: activeItem.thumb,
       }
     }
@@ -481,33 +329,6 @@
       if (typeof stop === 'function') stop()
       document.removeEventListener('click', closeMenu)
       document.removeEventListener('keydown', onKey)
-      if (objectURL) URL.revokeObjectURL(objectURL)
-    }
-  })
-
-  $effect(() => {
-    const node = frame
-    if (!node) return
-    const observer = new ResizeObserver(() => {
-      const prevW = frameW
-      const prevH = frameH
-      measure()
-      if (source && (prevW === 0 || prevH === 0)) centerImage()
-      else clamp()
-    })
-    observer.observe(node)
-    node.addEventListener('wheel', onWheel, { passive: false })
-    const tick = requestAnimationFrame(() => {
-      const prevW = frameW
-      const prevH = frameH
-      measure()
-      if (source && (prevW === 0 || prevH === 0)) centerImage()
-      else clamp()
-    })
-    return () => {
-      cancelAnimationFrame(tick)
-      observer.disconnect()
-      node.removeEventListener('wheel', onWheel)
     }
   })
 </script>
@@ -526,7 +347,7 @@
     </div>
   </header>
 
-  <div class="shell">
+  <div class="shell" class:editing={view === 'edit'}>
     {#if view === 'home'}
       <div class="topbar" role="banner" tabindex="-1" ondblclick={onTitleDblClick}>
         <div class="brand">
@@ -540,42 +361,7 @@
           </svg>
           Turris Studio
         </div>
-        <div class="device-wrap nodrag">
-          <button
-            class="device"
-            onclick={onDevice}
-            disabled={working && !status.connected}
-            aria-expanded={menu?.type === 'device'}
-            title={status.connected ? status.serial || 'Connected' : status.detail}
-          >
-            <span class="device-icon" aria-hidden="true">
-              <svg viewBox="0 0 36 28">
-                <rect x="1.2" y="2" width="33.6" height="20" rx="4" fill="#f4f5f7" stroke="#d5d8de" />
-                <rect x="4.2" y="5" width="27.6" height="12.2" rx="2" fill="#d7dbe2" />
-                <path d="M13 25.2h10" stroke="#c5c9d1" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
-            </span>
-            <span class="device-copy">
-              <strong>TRYX TURRIS 620</strong>
-              <span class="state">
-                <i class="dot" class:on={status.connected}></i>
-                <span class="state-text">
-                  {status.connected ? 'Connected' : 'Not connected'}
-                </span>
-              </span>
-            </span>
-          </button>
-          {#if menu?.type === 'device'}
-            <div class="menu device-menu">
-              {#if status.serial}
-                <p class="hint">{status.serial}</p>
-              {/if}
-              <button onclick={restartCooler} disabled={working} title="Restarts the cooler’s screen if the background stops changing.">
-                Restart cooler
-              </button>
-            </div>
-          {/if}
-        </div>
+        <DeviceChip {status} {working} onConnect={connectQuietly} onRestart={restartCooler} />
       </div>
 
       {#if error}
@@ -623,7 +409,7 @@
                 spellcheck="false"
               />
             </label>
-            <button class="add" onclick={openEditor} disabled={working}>
+            <button class="add" onclick={() => openEditor()} disabled={working}>
               <svg viewBox="0 0 14 14" aria-hidden="true">
                 <path d="M7 1.6v10.8M1.6 7h10.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
               </svg>
@@ -665,129 +451,58 @@
         {:else}
           <div class="grid">
             {#each visible as item (item.id)}
-              <article class="card">
-                <div class="shot">
+              <article class="card" class:editable={item.editable}>
+                <button class="shot" onclick={() => item.editable && openEditor(item.id)} disabled={!item.editable || working} aria-label="Edit {item.name}">
                   {#if item.thumb}
                     <img alt="" src={item.thumb} />
                   {:else}
                     <div class="shot-fallback"></div>
                   {/if}
                   <span class="badge">{kindLabel(kindOf(item))}</span>
-                  <button class="more" aria-label="Actions for {item.name}" aria-expanded={menu?.type === 'card' && menu.id === item.id} onclick={(event) => toggleCardMenu(item.id, event)}>
-                    <svg viewBox="0 0 16 16" aria-hidden="true">
-                      <circle cx="3.2" cy="8" r="1.15" fill="currentColor" />
-                      <circle cx="8" cy="8" r="1.15" fill="currentColor" />
-                      <circle cx="12.8" cy="8" r="1.15" fill="currentColor" />
-                    </svg>
-                  </button>
-                </div>
+                  {#if item.remoteName && item.remoteName === activeName}
+                    <span class="badge live">On the cooler</span>
+                  {/if}
+                </button>
+                <button class="more" aria-label="Actions for {item.name}" aria-expanded={menu?.type === 'card' && menu.id === item.id} onclick={(event) => toggleCardMenu(item.id, event)}>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <circle cx="3.2" cy="8" r="1.15" fill="currentColor" />
+                    <circle cx="8" cy="8" r="1.15" fill="currentColor" />
+                    <circle cx="12.8" cy="8" r="1.15" fill="currentColor" />
+                  </svg>
+                </button>
                 {#if menu?.type === 'card' && menu.id === item.id}
                   <div class="menu card-menu">
-                    <button onclick={() => applyItem(item.id)} disabled={working || !status.connected}>Show on cooler</button>
+                    {#if item.editable}
+                      <button onclick={() => openEditor(item.id)} disabled={working}>Edit</button>
+                    {/if}
+                    {#if item.remoteName}
+                      <button onclick={() => applyItem(item.id)} disabled={working || !status.connected}>
+                        {item.draft ? 'Show last saved version' : 'Show on cooler'}
+                      </button>
+                    {/if}
                     <button class="danger" onclick={() => removeItem(item.id)} disabled={working}>Remove</button>
                   </div>
                 {/if}
                 <h3>{item.name}</h3>
-                <p>{editedLabel(item.created)}</p>
+                <p>{editedLabel(item)}</p>
               </article>
             {/each}
           </div>
         {/if}
       </section>
     {:else}
-      <div class="editor">
-        <div class="editor-head">
-          <button class="back" onclick={goHome}>
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M7.6 2.4L4 6l3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            Projects
-          </button>
-          <div>
-            <h2>New picture</h2>
-            <p>Crop it to the cooler’s screen, then send it.</p>
-          </div>
-        </div>
-
-        <div
-          class="frame"
-          class:ready={!!source}
-          role="application"
-          aria-label="Crop to the cooler screen"
-          bind:this={frame}
-          onpointerdown={pointerDown}
-          onpointermove={pointerMove}
-          onpointerup={pointerUp}
-          onpointercancel={pointerUp}
-          ondragover={(event) => event.preventDefault()}
-          ondrop={(event) => {
-            event.preventDefault()
-            loadFile(event.dataTransfer?.files?.[0])
-          }}
-        >
-          {#if source}
-            <img
-              alt=""
-              src={objectURL}
-              draggable="false"
-              style:width="{source.naturalWidth * scaled()}px"
-              style:height="{source.naturalHeight * scaled()}px"
-              style:transform="translate({offsetX}px, {offsetY}px)"
-            />
-          {:else}
-            <div class="drop">
-              <strong>Drop a picture here</strong>
-              <span>This frame is the cooler’s 1280×720 screen.</span>
-            </div>
-          {/if}
-        </div>
-
-        <div class="controls">
-          <label class="zoom">
-            Zoom
-            <input
-              type="range"
-              min="1"
-              max="4"
-              step="0.01"
-              value={zoom}
-              disabled={!source}
-              oninput={(event) => {
-                zoom = Number(event.currentTarget.value)
-                clamp()
-              }}
-            />
-          </label>
-          <div class="actions">
-            <button class="btn" onclick={() => picker?.click()}>Choose picture</button>
-            <button class="btn" onclick={centerImage} disabled={!source}>Reset crop</button>
-          </div>
-          <input
-            type="text"
-            placeholder="Name in the library"
-            bind:value={title}
-            disabled={!source}
-          />
-          <button class="add send" onclick={show} disabled={!source || working || !status.connected}>
-            Show on cooler
-          </button>
-        </div>
-        <input
-          bind:this={picker}
-          type="file"
-          accept="image/*"
-          hidden
-          onchange={(event) => {
-            loadFile(event.currentTarget.files?.[0])
-            event.currentTarget.value = ''
-          }}
+      {#key editorKey}
+        <Editor
+          projectId={editing}
+          {status}
+          {working}
+          {job}
+          onClose={closeEditor}
+          {onSaved}
+          onConnect={connectQuietly}
+          onRestart={restartCooler}
         />
-        {#if error}
-          <p class="banner">{error}</p>
-        {:else}
-          <p class="note">Drag to move the picture. Scroll or use the slider to zoom. Quit KANALI before connecting; it uses the same bridge.</p>
-        {/if}
-      </div>
+      {/key}
     {/if}
   </div>
 </div>

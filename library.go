@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"image/jpeg"
+	_ "image/jpeg"
 	_ "image/png"
 	"os"
 	"path/filepath"
@@ -17,13 +17,29 @@ import (
 	"time"
 )
 
-// MediaItem is one cropped image the cooler has shown.
+// MediaItem is one project in the library. RemoteName is empty until it has been exported.
 type MediaItem struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	RemoteName string `json:"remoteName"`
-	Created    string `json:"created"`
-	Thumb      string `json:"thumb"`
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	RemoteName string  `json:"remoteName"`
+	Created    string  `json:"created"`
+	Thumb      string  `json:"thumb"`
+	Kind       string  `json:"kind"`
+	Draft      bool    `json:"draft"`
+	Editable   bool    `json:"editable"`
+	Duration   float64 `json:"duration"`
+	Size       int64   `json:"size"`
+}
+
+// ProjectSave is what the editor hands over when it saves.
+// Data is the editor's project JSON. Thumb is a JPEG data URL.
+type ProjectSave struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Kind     string  `json:"kind"`
+	Duration float64 `json:"duration"`
+	Data     string  `json:"data"`
+	Thumb    string  `json:"thumb"`
 }
 
 type Library struct {
@@ -40,7 +56,13 @@ type storedItem struct {
 	Name       string    `json:"name"`
 	RemoteName string    `json:"remoteName"`
 	Created    time.Time `json:"created"`
+	Kind       string    `json:"kind,omitempty"`
+	Draft      bool      `json:"draft,omitempty"`
+	Duration   float64   `json:"duration,omitempty"`
+	Size       int64     `json:"size,omitempty"`
 }
+
+var projectKinds = map[string]bool{"image": true, "video": true, "gif": true, "widget": true}
 
 func OpenLibrary() (*Library, error) {
 	root, err := os.UserConfigDir()
@@ -72,64 +94,6 @@ func (l *Library) List() ([]MediaItem, error) {
 	return out, nil
 }
 
-// Create stores a cropped PNG, encodes it, and returns the library entry.
-// The H.264 path is the file to upload. Discard removes it if upload fails.
-func (l *Library) Create(name, pngBase64 string) (MediaItem, string, error) {
-	data, err := decodePNGPayload(pngBase64)
-	if err != nil {
-		return MediaItem{}, "", err
-	}
-	if _, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil {
-		return MediaItem{}, "", fmt.Errorf("that file is not a PNG the cropper can save")
-	}
-	ffmpeg, err := findFFmpeg()
-	if err != nil {
-		return MediaItem{}, "", err
-	}
-
-	id, err := newID()
-	if err != nil {
-		return MediaItem{}, "", err
-	}
-	created := time.Now()
-	remote := remoteName(created)
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	pngPath := filepath.Join(l.dir, id+".png")
-	h264Path := filepath.Join(l.dir, remote)
-	if err := os.WriteFile(pngPath, data, 0o644); err != nil {
-		return MediaItem{}, "", err
-	}
-	if err := writeThumb(data, filepath.Join(l.dir, id+".jpg")); err != nil {
-		os.Remove(pngPath)
-		return MediaItem{}, "", err
-	}
-	if err := encodeStill(ffmpeg, pngPath, h264Path); err != nil {
-		os.Remove(pngPath)
-		os.Remove(filepath.Join(l.dir, id+".jpg"))
-		return MediaItem{}, "", err
-	}
-
-	idx, err := l.readIndex()
-	if err != nil {
-		os.Remove(pngPath)
-		os.Remove(h264Path)
-		os.Remove(filepath.Join(l.dir, id+".jpg"))
-		return MediaItem{}, "", err
-	}
-	stored := storedItem{ID: id, Name: cleanName(name), RemoteName: remote, Created: created}
-	idx.Items = append(idx.Items, stored)
-	if err := l.writeIndex(idx); err != nil {
-		os.Remove(pngPath)
-		os.Remove(h264Path)
-		os.Remove(filepath.Join(l.dir, id+".jpg"))
-		return MediaItem{}, "", err
-	}
-	return l.publicItem(stored), h264Path, nil
-}
-
 func (l *Library) File(id string) (MediaItem, string, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -145,9 +109,10 @@ func (l *Library) File(id string) (MediaItem, string, error) {
 	return MediaItem{}, "", fmt.Errorf("that image is no longer in the library")
 }
 
-// Renew encodes a library image under a new cooler file name and returns the name it replaced.
+// Renew moves a library clip to a new cooler file name and returns the name it replaced.
 // Re-sending under the old name overwrites the clip the panel may be playing, and setting
-// an unchanged name does not make the panel reload.
+// an unchanged name does not make the panel reload. Older items without a stored clip
+// are encoded again from their PNG.
 func (l *Library) Renew(id string) (item MediaItem, path, previous string, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -160,28 +125,135 @@ func (l *Library) Renew(id string) (item MediaItem, path, previous string, err e
 		if stored.ID != id {
 			continue
 		}
-		pngPath := filepath.Join(l.dir, stored.ID+".png")
-		if _, err := os.Stat(pngPath); err != nil {
-			return MediaItem{}, "", "", fmt.Errorf("the saved image file is missing")
-		}
-		ffmpeg, err := findFFmpeg()
-		if err != nil {
-			return MediaItem{}, "", "", err
-		}
 		previous = stored.RemoteName
 		next := remoteName(time.Now())
 		path = filepath.Join(l.dir, next)
-		if err := encodeStill(ffmpeg, pngPath, path); err != nil {
-			return MediaItem{}, "", "", err
+		clip := ""
+		if previous != "" {
+			clip = filepath.Join(l.dir, previous)
 		}
-		os.Remove(filepath.Join(l.dir, previous))
+		if _, statErr := os.Stat(clip); clip != "" && statErr == nil {
+			if err := os.Rename(clip, path); err != nil {
+				return MediaItem{}, "", "", err
+			}
+		} else {
+			pngPath := filepath.Join(l.dir, stored.ID+".png")
+			if _, err := os.Stat(pngPath); err != nil {
+				return MediaItem{}, "", "", fmt.Errorf("this project has not been saved to the library yet. Open it and choose Save to Library")
+			}
+			ffmpeg, err := findFFmpeg()
+			if err != nil {
+				return MediaItem{}, "", "", err
+			}
+			if err := encodeStill(ffmpeg, pngPath, path); err != nil {
+				return MediaItem{}, "", "", err
+			}
+		}
 		stored.RemoteName = next
 		if err := l.writeIndex(idx); err != nil {
 			return MediaItem{}, "", "", err
 		}
 		return l.publicItem(*stored), path, previous, nil
 	}
-	return MediaItem{}, "", "", fmt.Errorf("that image is no longer in the library")
+	return MediaItem{}, "", "", fmt.Errorf("that project is no longer in the library")
+}
+
+// SaveProject stores an editor project and its thumbnail. With clipPath set, that encoded
+// clip becomes the project's cooler file under a new name, and previous is the name it replaced.
+// Without it the project is a draft and keeps whatever clip it had.
+func (l *Library) SaveProject(p ProjectSave, clipPath string, clipSize int64) (item MediaItem, path, previous string, err error) {
+	if l.dir == "" {
+		return MediaItem{}, "", "", fmt.Errorf("media library is unavailable")
+	}
+	if strings.TrimSpace(p.Data) == "" || !json.Valid([]byte(p.Data)) {
+		return MediaItem{}, "", "", fmt.Errorf("the project could not be read")
+	}
+	thumb, err := decodeImagePayload(p.Thumb)
+	if err != nil {
+		return MediaItem{}, "", "", err
+	}
+	kind := p.Kind
+	if !projectKinds[kind] {
+		kind = "image"
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	idx, err := l.readIndex()
+	if err != nil {
+		return MediaItem{}, "", "", err
+	}
+	stored := storedItem{}
+	found := -1
+	if p.ID != "" {
+		for i, it := range idx.Items {
+			if it.ID == p.ID {
+				stored, found = it, i
+				break
+			}
+		}
+	}
+	if found < 0 {
+		id, err := newID()
+		if err != nil {
+			return MediaItem{}, "", "", err
+		}
+		stored.ID = id
+	} else {
+		idx.Items = append(idx.Items[:found], idx.Items[found+1:]...)
+	}
+	stored.Name = cleanName(p.Name)
+	stored.Kind = kind
+	stored.Duration = p.Duration
+	stored.Created = time.Now()
+
+	if err := os.WriteFile(filepath.Join(l.dir, stored.ID+".project.json"), []byte(p.Data), 0o644); err != nil {
+		return MediaItem{}, "", "", err
+	}
+	if err := os.WriteFile(filepath.Join(l.dir, stored.ID+".jpg"), thumb, 0o644); err != nil {
+		return MediaItem{}, "", "", err
+	}
+	if clipPath == "" {
+		stored.Draft = true
+	} else {
+		previous = stored.RemoteName
+		next := remoteName(stored.Created)
+		path = filepath.Join(l.dir, next)
+		if err := moveFile(clipPath, path); err != nil {
+			return MediaItem{}, "", "", err
+		}
+		if previous != "" {
+			os.Remove(filepath.Join(l.dir, previous))
+		}
+		stored.RemoteName = next
+		stored.Size = clipSize
+		stored.Draft = false
+	}
+	idx.Items = append(idx.Items, stored)
+	if err := l.writeIndex(idx); err != nil {
+		return MediaItem{}, "", "", err
+	}
+	return l.publicItem(stored), path, previous, nil
+}
+
+// Project returns the editor JSON saved for a library item.
+func (l *Library) Project(id string) (string, error) {
+	if !assetID(id) {
+		return "", fmt.Errorf("that project is no longer in the library")
+	}
+	data, err := os.ReadFile(filepath.Join(l.dir, id+".project.json"))
+	if err != nil {
+		return "", fmt.Errorf("this item was made before the editor and cannot be opened")
+	}
+	return string(data), nil
+}
+
+func assetID(id string) bool {
+	if len(id) != 16 {
+		return false
+	}
+	_, err := hex.DecodeString(id)
+	return err == nil
 }
 
 // remoteName is the basename the cooler stores.
@@ -215,7 +287,10 @@ func (l *Library) Discard(id string) error {
 	}
 	os.Remove(filepath.Join(l.dir, removed.ID+".png"))
 	os.Remove(filepath.Join(l.dir, removed.ID+".jpg"))
-	os.Remove(filepath.Join(l.dir, removed.RemoteName))
+	os.Remove(filepath.Join(l.dir, removed.ID+".project.json"))
+	if removed.RemoteName != "" {
+		os.Remove(filepath.Join(l.dir, removed.RemoteName))
+	}
 	return nil
 }
 
@@ -224,12 +299,22 @@ func (l *Library) publicItem(item storedItem) MediaItem {
 	if data, err := os.ReadFile(filepath.Join(l.dir, item.ID+".jpg")); err == nil {
 		thumb = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)
 	}
+	kind := item.Kind
+	if kind == "" {
+		kind = "image"
+	}
+	_, err := os.Stat(filepath.Join(l.dir, item.ID+".project.json"))
 	return MediaItem{
 		ID:         item.ID,
 		Name:       item.Name,
 		RemoteName: item.RemoteName,
 		Created:    item.Created.Format("2 Jan 2006, 15:04"),
 		Thumb:      thumb,
+		Kind:       kind,
+		Draft:      item.Draft,
+		Editable:   err == nil,
+		Duration:   item.Duration,
+		Size:       item.Size,
 	}
 }
 
@@ -257,55 +342,20 @@ func (l *Library) writeIndex(idx indexFile) error {
 	return os.WriteFile(filepath.Join(l.dir, "index.json"), data, 0o644)
 }
 
-func decodePNGPayload(payload string) ([]byte, error) {
+// decodeImagePayload reads a base64 or data-URL image the editor sent.
+func decodeImagePayload(payload string) ([]byte, error) {
 	payload = strings.TrimSpace(payload)
 	if i := strings.Index(payload, ","); i >= 0 && strings.Contains(strings.ToLower(payload[:i]), "base64") {
 		payload = payload[i+1:]
 	}
 	data, err := base64.StdEncoding.DecodeString(payload)
-	if err != nil {
-		return nil, fmt.Errorf("could not read the cropped image")
+	if err != nil || len(data) == 0 {
+		return nil, fmt.Errorf("could not read the project thumbnail")
 	}
-	if len(data) == 0 {
-		return nil, fmt.Errorf("the cropped image was empty")
+	if _, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil {
+		return nil, fmt.Errorf("could not read the project thumbnail")
 	}
 	return data, nil
-}
-
-func writeThumb(png []byte, path string) error {
-	img, _, err := image.Decode(bytes.NewReader(png))
-	if err != nil {
-		return err
-	}
-	b := img.Bounds()
-	tw := 320
-	th := 180
-	if b.Dx() > 0 && b.Dy() > 0 {
-		th = tw * b.Dy() / b.Dx()
-		if th < 1 {
-			th = 1
-		}
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, tw, th))
-	for y := 0; y < th; y++ {
-		sy := b.Min.Y
-		if b.Dy() > 0 {
-			sy = b.Min.Y + y*b.Dy()/th
-		}
-		for x := 0; x < tw; x++ {
-			sx := b.Min.X
-			if b.Dx() > 0 {
-				sx = b.Min.X + x*b.Dx()/tw
-			}
-			dst.Set(x, y, img.At(sx, sy))
-		}
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return jpeg.Encode(f, dst, &jpeg.Options{Quality: 82})
 }
 
 func newID() (string, error) {

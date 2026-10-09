@@ -4,16 +4,42 @@ import {main} from '../models';
 
 export function ActiveName():Promise<string>;
 
+export function AppendFrames(arg1:string,arg2:Array<string>):Promise<void>;
+
 export function Apply(arg1:string):Promise<void>;
+
+export function BeginExport():Promise<string>;
+
+export function CancelExport(arg1:string):Promise<void>;
+
+export function CancelYouTube():Promise<void>;
 
 export function Connect():Promise<main.BridgeStatus>;
 
+export function FinishExport(arg1:main.ExportRequest):Promise<main.ExportResult>;
+
+export function GetAssets():Promise<Array<main.Asset>>;
+
+export function GetExportLimits():Promise<main.ExportLimits>;
+
 export function GetLibrary():Promise<Array<main.MediaItem>>;
+
+export function GetProject(arg1:string):Promise<string>;
+
+export function GetYouTubeTool():Promise<main.YouTubeTool>;
+
+export function ImportMedia():Promise<main.ImportResult>;
+
+export function ImportPaths(arg1:Array<string>):Promise<main.ImportResult>;
+
+export function ImportYouTube(arg1:main.YouTubeRequest):Promise<main.Asset>;
 
 export function Job():Promise<main.JobProgress>;
 
 export function Remove(arg1:string):Promise<void>;
 
+export function RemoveAsset(arg1:string):Promise<void>;
+
 export function RestartCooler():Promise<main.BridgeStatus>;
 
-export function ShowImage(arg1:string,arg2:string):Promise<main.MediaItem>;
+export function SaveDraft(arg1:main.ProjectSave):Promise<main.MediaItem>;

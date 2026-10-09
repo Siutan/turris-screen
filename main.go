@@ -19,13 +19,18 @@ func main() {
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:     "Turris Studio",
-		Width:     1240,
-		Height:    860,
-		MinWidth:  1040,
-		MinHeight: 700,
+		Width:     1440,
+		Height:    920,
+		MinWidth:  1180,
+		MinHeight: 760,
 		Frameless: true,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:     assets,
+			Middleware: app.media.Middleware,
+		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: true,
 		},
 		BackgroundColour: &options.RGBA{R: 232, G: 232, B: 236, A: 1},
 		Windows: &windows.Options{

@@ -6,16 +6,64 @@ export function ActiveName() {
   return window['go']['main']['App']['ActiveName']();
 }
 
+export function AppendFrames(arg1, arg2) {
+  return window['go']['main']['App']['AppendFrames'](arg1, arg2);
+}
+
 export function Apply(arg1) {
   return window['go']['main']['App']['Apply'](arg1);
+}
+
+export function BeginExport() {
+  return window['go']['main']['App']['BeginExport']();
+}
+
+export function CancelExport(arg1) {
+  return window['go']['main']['App']['CancelExport'](arg1);
+}
+
+export function CancelYouTube() {
+  return window['go']['main']['App']['CancelYouTube']();
 }
 
 export function Connect() {
   return window['go']['main']['App']['Connect']();
 }
 
+export function FinishExport(arg1) {
+  return window['go']['main']['App']['FinishExport'](arg1);
+}
+
+export function GetAssets() {
+  return window['go']['main']['App']['GetAssets']();
+}
+
+export function GetExportLimits() {
+  return window['go']['main']['App']['GetExportLimits']();
+}
+
 export function GetLibrary() {
   return window['go']['main']['App']['GetLibrary']();
+}
+
+export function GetProject(arg1) {
+  return window['go']['main']['App']['GetProject'](arg1);
+}
+
+export function GetYouTubeTool() {
+  return window['go']['main']['App']['GetYouTubeTool']();
+}
+
+export function ImportMedia() {
+  return window['go']['main']['App']['ImportMedia']();
+}
+
+export function ImportPaths(arg1) {
+  return window['go']['main']['App']['ImportPaths'](arg1);
+}
+
+export function ImportYouTube(arg1) {
+  return window['go']['main']['App']['ImportYouTube'](arg1);
 }
 
 export function Job() {
@@ -26,10 +74,14 @@ export function Remove(arg1) {
   return window['go']['main']['App']['Remove'](arg1);
 }
 
+export function RemoveAsset(arg1) {
+  return window['go']['main']['App']['RemoveAsset'](arg1);
+}
+
 export function RestartCooler() {
   return window['go']['main']['App']['RestartCooler']();
 }
 
-export function ShowImage(arg1, arg2) {
-  return window['go']['main']['App']['ShowImage'](arg1, arg2);
+export function SaveDraft(arg1) {
+  return window['go']['main']['App']['SaveDraft'](arg1);
 }
