@@ -11,7 +11,7 @@ import {
   RGBSplitFilter,
 } from 'pixi-filters'
 import * as PIXI from 'pixi.js'
-import { H, W } from './project.js'
+import { H, W, effectControls, effectSettings } from './project.js'
 
 const STEP = 1 / 30
 const SEEK_GAP = 0.12
@@ -136,15 +136,34 @@ function wrapHue(degrees) {
   return hue
 }
 
-function lightning(t, u) {
-  if (u <= 0) return 0
+function slider(settings, key) {
+  const value = Number(settings?.[key])
+  if (!Number.isFinite(value)) return 0
+  return Math.min(100, Math.max(0, value))
+}
+
+// pace is 0 at a stopped slider, 1 at 50, and 2 at 100.
+function pace(settings, key = 'speed') {
+  return slider(settings, key) / 50
+}
+
+// scaled maps a slider so its default position reproduces atDefault, and 0 is off.
+function scaled(effectId, settings, key, atDefault) {
+  const def = effectControls(effectId).find((item) => item.id === key)?.def ?? 0
+  if (!def) return 0
+  return (slider(settings, key) / def) * atDefault
+}
+
+function lightning(t, amount, rate) {
+  if (amount <= 0 || rate <= 0) return 0
+  const clock = t * rate
   let alpha = 0
   for (const period of [2.6, 6.1, 9.4]) {
-    const x = t % period
+    const x = clock % period
     if (x < 0.05) alpha = Math.max(alpha, 0.92)
     else if (x < 0.12) alpha = Math.max(alpha, 0.38)
   }
-  return alpha * (0.35 + 0.65 * u)
+  return alpha * amount
 }
 
 function softCircle(size, inner, outer) {
@@ -253,39 +272,36 @@ function emitterConfig(spec, textures) {
 }
 
 function seedField(emitter) {
-  const count = Math.max(12, Math.round(emitter.maxParticles * 0.55))
+  const count = Math.round(emitter.maxParticles * 0.55)
+  if (count < 1) return
   const wave = emitter.particlesPerWave
   emitter.particlesPerWave = count
   emitter.emitNow()
   emitter.particlesPerWave = wave
 }
 
-function tune(emitter, spec, u) {
-  const density = Math.max(0.08, u)
-  emitter.frequency = spec.frequency / density
-  emitter.maxParticles = Math.max(4, Math.round(spec.maxParticles * density))
-  emitter.emit = u > 0.02
-}
-
-function applySlices(filter, local, slices, offset) {
-  if (filter.slices !== slices) filter.slices = slices
+function applySlices(filter, clock, slices, offset) {
+  const count = Math.round(slices)
+  if (count < 2 || offset <= 0) return false
+  if (filter.slices !== count) filter.slices = count
   filter.offset = offset
   filter.fillMode = GlitchFilter.LOOP
-  filter.seed = unitSeed(local)
-  const rand = mulberry32((Math.floor(local * 30) + 1) * 997)
-  const sizes = new Float32Array(slices)
+  filter.seed = unitSeed(clock)
+  const rand = mulberry32((Math.floor(Math.max(0, clock) * 30) + 1) * 997)
+  const sizes = new Float32Array(count)
   let remain = 1
-  for (let i = 0; i < slices - 1; i++) {
+  for (let i = 0; i < count - 1; i++) {
     const take = remain * (0.2 + rand() * 0.45)
     sizes[i] = take
     remain -= take
   }
-  sizes[slices - 1] = Math.max(0.02, remain)
-  const offsets = new Float32Array(slices)
-  for (let i = 0; i < slices; i++) offsets[i] = rand() * 2 - 1
+  sizes[count - 1] = Math.max(0.02, remain)
+  const offsets = new Float32Array(count)
+  for (let i = 0; i < count; i++) offsets[i] = rand() * 2 - 1
   filter.sizes = sizes
   filter.offsets = offsets
   filter.redraw()
+  return true
 }
 
 function ensure() {
@@ -360,101 +376,134 @@ function ensure() {
   }
 }
 
-function configure(id, local, u) {
+function configure(id, local, settings) {
   flash.visible = false
   flash.alpha = 0
-  sprite.filters = null
-  const seed = unitSeed(local)
-
-  if (id === 'snow' || id === 'rain') return
+  const filters = []
+  const clock = local * pace(settings)
 
   if (id === 'storm') {
-    grade.reset()
-    grade.brightness(1 - 0.48 * u, false)
-    sprite.filters = [grade]
-    flash.alpha = lightning(local, u)
+    const darkness = scaled(id, settings, 'darkness', 0.336)
+    if (darkness > 0) {
+      grade.reset()
+      grade.brightness(1 - darkness, false)
+      filters.push(grade)
+    }
+    flash.alpha = lightning(local, slider(settings, 'lightning') / 100, pace(settings, 'flash'))
     flash.visible = flash.alpha > 0.01
-    return
+  } else if (id === 'fog') {
+    const soft = scaled(id, settings, 'blur', 7.8)
+    const haze = scaled(id, settings, 'haze', 0.318)
+    if (soft > 0) {
+      blur.blur = soft
+      filters.push(blur)
+    }
+    if (haze > 0) {
+      overlay.color = 0xe7eef6
+      overlay.alpha = haze
+      filters.push(overlay)
+    }
+  } else if (id === 'sun') {
+    const rays = scaled(id, settings, 'rays', 1)
+    const warmth = scaled(id, settings, 'warmth', 1)
+    if (warmth > 0) {
+      grade.reset()
+      grade.brightness(1 + 0.11 * warmth, false)
+      grade.saturate(0.325 * warmth, true)
+      filters.push(grade)
+    }
+    if (rays > 0) {
+      godray.time = clock
+      godray.gain = 0.67 * rays
+      godray.alpha = 0.785 * rays
+      filters.push(godray)
+    }
+  } else if (id === 'blizzard') {
+    const whiteout = scaled(id, settings, 'whiteout', 0.38)
+    if (whiteout > 0) {
+      overlay.color = 0xffffff
+      overlay.alpha = whiteout
+      filters.push(overlay)
+    }
+  } else if (id === 'glitch') {
+    const offset = scaled(id, settings, 'offset', 79)
+    const slices = slider(settings, 'slices') > 0 ? Math.max(2, Math.round(scaled(id, settings, 'slices', 12))) : 0
+    if (applySlices(glitch, clock, slices, offset)) filters.push(glitch)
+    const shift = scaled(id, settings, 'split', 12.8)
+    if (shift > 0) {
+      rgb.red = [shift, 0]
+      rgb.green = [0, 0]
+      rgb.blue = [-shift, shift * 0.25]
+      filters.push(rgb)
+    }
+  } else if (id === 'duotone') {
+    const mix = scaled(id, settings, 'color', 0.886)
+    const wave = scaled(id, settings, 'wave', 1)
+    if (mix > 0) {
+      colorMap.mix = mix
+      filters.push(colorMap)
+    }
+    if (wave > 0) {
+      displace.scale.x = 72 * wave
+      displace.scale.y = 33.2 * wave
+      displacementSprite.x = Math.sin(clock * 0.8) * 16
+      displacementSprite.y = (clock * 46) % 128
+      filters.push(displace)
+    }
+  } else if (id === 'vhs') {
+    const scan = scaled(id, settings, 'scanlines', 0.44)
+    const grain = scaled(id, settings, 'noise', 1)
+    const scratches = scaled(id, settings, 'scratches', 0.535)
+    const curve = scaled(id, settings, 'curve', 1)
+    if (scan > 0 || grain > 0 || curve > 0) {
+      crt.time = clock
+      crt.seed = unitSeed(clock)
+      crt.noise = 0.276 * grain
+      crt.lineContrast = scan
+      crt.lineWidth = scan > 0 ? 2 : 0
+      crt.curvature = 1.26 * curve
+      crt.vignetting = 0.28 * curve
+      crt.vignettingAlpha = curve > 0 ? 0.65 : 0
+      filters.push(crt)
+    }
+    if (grain > 0 || scratches > 0 || curve > 0) {
+      film.seed = unitSeed(clock + 4)
+      film.noise = 0.36 * grain
+      film.scratch = scratches
+      film.scratchDensity = scratches > 0 ? 0.25 : 0
+      film.sepia = 0.194 * curve
+      filters.push(film)
+    }
+  } else if (id === 'signal') {
+    if (slider(settings, 'blocks') > 0) {
+      pixelate.size = Math.max(2, Math.round(scaled(id, settings, 'blocks', 13)))
+      filters.push(pixelate)
+    }
+    const grain = scaled(id, settings, 'noise', 0.505)
+    if (grain > 0) {
+      noise.noise = grain
+      noise.seed = unitSeed(clock)
+      filters.push(noise)
+    }
+    const breakup = scaled(id, settings, 'breakup', 128)
+    if (applySlices(glitch, clock + 1.7, breakup > 0 ? 4 : 0, breakup)) filters.push(glitch)
+  } else if (id === 'prism') {
+    const amp = scaled(id, settings, 'split', 20.8)
+    const color = scaled(id, settings, 'color', 1)
+    if (amp > 0) {
+      rgb.red = [Math.sin(clock * 2.1) * amp, Math.cos(clock * 1.3) * amp * 0.35]
+      rgb.green = [Math.sin(clock * 1.1) * amp * 0.2, Math.sin(clock * 1.7) * amp * 0.3]
+      rgb.blue = [Math.cos(clock * 1.9) * amp, Math.sin(clock * 0.8) * amp * 0.25]
+      filters.push(rgb)
+    }
+    if (color > 0) {
+      hsl.hue = wrapHue(clock * 28)
+      hsl.saturation = 0.61 * color
+      filters.push(hsl)
+    }
   }
 
-  if (id === 'fog') {
-    blur.blur = 1.5 + u * 9
-    overlay.color = 0xe7eef6
-    overlay.alpha = 0.08 + u * 0.34
-    sprite.filters = [blur, overlay]
-    return
-  }
-
-  if (id === 'sun') {
-    grade.reset()
-    grade.brightness(1.04 + 0.1 * u, false)
-    grade.saturate(0.15 + 0.25 * u, true)
-    godray.time = local
-    godray.gain = 0.18 + u * 0.7
-    godray.alpha = 0.4 + u * 0.55
-    sprite.filters = [grade, godray]
-    return
-  }
-
-  if (id === 'blizzard') {
-    overlay.color = 0xffffff
-    overlay.alpha = 0.1 + u * 0.4
-    sprite.filters = [overlay]
-    return
-  }
-
-  if (id === 'glitch') {
-    applySlices(glitch, local, 6 + Math.round(u * 8), 16 + u * 90)
-    const shift = 3 + u * 14
-    rgb.red = [shift, 0]
-    rgb.green = [0, 0]
-    rgb.blue = [-shift, shift * 0.25]
-    sprite.filters = [glitch, rgb]
-    return
-  }
-
-  if (id === 'duotone') {
-    colorMap.mix = 0.62 + u * 0.38
-    displace.scale.x = 16 + u * 80
-    displace.scale.y = 8 + u * 36
-    displacementSprite.x = Math.sin(local * 0.8) * 16
-    displacementSprite.y = (local * 46) % 128
-    sprite.filters = [colorMap, displace]
-    return
-  }
-
-  if (id === 'vhs') {
-    crt.time = local
-    crt.seed = seed
-    crt.noise = 0.08 + u * 0.28
-    crt.lineContrast = 0.16 + u * 0.4
-    crt.curvature = 0.35 + u * 1.3
-    film.seed = unitSeed(local + 4)
-    film.noise = 0.08 + u * 0.4
-    film.scratch = 0.15 + u * 0.55
-    film.sepia = 0.04 + u * 0.22
-    sprite.filters = [crt, film]
-    return
-  }
-
-  if (id === 'signal') {
-    pixelate.size = 3 + Math.round(u * 14)
-    noise.noise = 0.12 + u * 0.55
-    noise.seed = seed
-    applySlices(glitch, local + 1.7, 4, 30 + u * 140)
-    sprite.filters = [pixelate, noise, glitch]
-    return
-  }
-
-  if (id === 'prism') {
-    const amp = 4 + u * 24
-    rgb.red = [Math.sin(local * 2.1) * amp, Math.cos(local * 1.3) * amp * 0.35]
-    rgb.green = [Math.sin(local * 1.1) * amp * 0.2, Math.sin(local * 1.7) * amp * 0.3]
-    rgb.blue = [Math.cos(local * 1.9) * amp, Math.sin(local * 0.8) * amp * 0.25]
-    hsl.hue = wrapHue(local * 28)
-    hsl.saturation = 0.12 + u * 0.7
-    sprite.filters = [rgb, hsl]
-  }
+  sprite.filters = filters.length ? filters : null
 }
 
 function ensureState(clip) {
@@ -474,13 +523,16 @@ function ensureState(clip) {
   return state
 }
 
-function stepTo(state, local) {
+function stepTo(state, local, speedScale) {
   const emitter = state.emitter
   if (!emitter) return
+  const advance = (dt) => {
+    if (speedScale <= 0 || dt <= 1e-4) return
+    emitter.update(dt * speedScale)
+  }
   const jump = state.time < 0 || local + 0.001 < state.time || local - state.time > SEEK_GAP
   if (!jump) {
-    const dt = local - state.time
-    if (dt > 1e-4) emitter.update(dt)
+    advance(local - state.time)
     state.time = local
     return
   }
@@ -489,12 +541,78 @@ function stepTo(state, local) {
   seedField(emitter)
   let clock = 0
   while (clock + STEP <= local + 1e-4) {
-    emitter.update(STEP)
+    advance(STEP)
     clock += STEP
   }
-  const rest = local - clock
-  if (rest > 1e-4) emitter.update(rest)
+  advance(local - clock)
   state.time = local
+}
+
+// restyle applies size and opacity after the emitter writes absolute values.
+// The authored scale is recovered when the emitter changes it, so a paused
+// playhead does not shrink the particles on every redraw.
+function restyle(container, settings) {
+  const hasSize = Number.isFinite(settings.size)
+  const hasLength = Number.isFinite(settings.length)
+  const mul = hasSize ? slider(settings, 'size') / 50 : hasLength ? slider(settings, 'length') / 50 : 1
+  const alphaMul = Number.isFinite(settings.opacity) ? slider(settings, 'opacity') / 100 : 1
+  for (const child of container.children) {
+    let authoredX = child._authoredX
+    let authoredY = child._authoredY
+    let authoredA = child._authoredA
+    const applied = child._appliedMul
+    const appliedA = child._appliedA
+    if (authoredX == null || Math.abs(child.scale.x - authoredX * applied) > 1e-3) authoredX = child.scale.x
+    if (authoredY == null || Math.abs(child.scale.y - authoredY * applied) > 1e-3) authoredY = child.scale.y
+    if (authoredA == null || Math.abs(child.alpha - authoredA * appliedA) > 1e-3) authoredA = child.alpha
+    child._authoredX = authoredX
+    child._authoredY = authoredY
+    child._authoredA = authoredA
+    child._appliedMul = mul
+    child._appliedA = alphaMul
+    child.scale.set(authoredX * mul, authoredY * mul)
+    child.alpha = authoredA * alphaMul
+  }
+}
+
+function placeAngle(container, settings) {
+  if (!Number.isFinite(settings.angle)) {
+    container.rotation = 0
+    container.pivot.set(0, 0)
+    container.position.set(0, 0)
+    return
+  }
+  const degrees = (settings.angle - 50) * 0.9
+  container.pivot.set(W / 2, H / 2)
+  container.position.set(W / 2, H / 2)
+  container.rotation = (degrees * Math.PI) / 180
+}
+
+function driveParticles(state, spec, settings, local) {
+  const emitter = state.emitter
+  const density = slider(settings, 'density') / 100
+  const speedScale = pace(settings)
+  placeAngle(state.container, settings)
+  if (density <= 0) {
+    emitter.emit = false
+    emitter.cleanup()
+    state.asleep = true
+    state.time = local
+    return
+  }
+  emitter.maxParticles = Math.max(1, Math.round(spec.maxParticles * density))
+  emitter.frequency = (spec.frequency * Math.max(speedScale, 0.001)) / density
+  emitter.emit = true
+  if (state.asleep) {
+    emitter.cleanup()
+    state.time = -1
+    state.asleep = false
+  }
+  if (speedScale <= 0 && state.time >= 0) {
+    if (emitter.particleCount < 1) seedField(emitter)
+    state.time = local
+  } else stepTo(state, local, speedScale)
+  restyle(state.container, settings)
 }
 
 function upload(source) {
@@ -528,14 +646,13 @@ export function resetEffects() {
 export function paintEffect(ctx, clip, t) {
   if (!ensure()) return
   const local = Math.max(0, t - clip.start)
-  const u = Math.min(1, Math.max(0, (clip.amount ?? 70) / 100))
+  const settings = effectSettings(clip)
   upload(ctx.canvas)
-  configure(clip.effect, local, u)
+  configure(clip.effect, local, settings)
   const state = ensureState(clip)
   particleHolder.removeChildren()
   if (state.emitter) {
-    tune(state.emitter, PARTICLES[clip.effect], u)
-    stepTo(state, local)
+    driveParticles(state, PARTICLES[clip.effect], settings, local)
     particleHolder.addChild(state.container)
   }
   app.renderer.render(stage)
