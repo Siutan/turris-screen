@@ -3,7 +3,7 @@
 
   let { studio, sources, assets, revision, onError } = $props()
 
-  let open = $state({ media: true, text: true, widgets: true, adjust: true })
+  let open = $state({ media: true, text: true, adjust: true })
   let mediaMenu = $state(false)
 
   let many = $derived(studio.selection.length > 1)
@@ -113,7 +113,7 @@
   {:else if !clip}
     <section class="ins-card ins-hint">
       <p><strong>Nothing selected</strong></p>
-      <p>Pick a clip on the timeline or click something in the preview to edit it.</p>
+      <p>Select something on the canvas or timeline. Its options show up here.</p>
     </section>
   {/if}
 
@@ -228,34 +228,6 @@
       {/if}
     </section>
   {/if}
-
-  <section class="ins-card">
-    {@render head('widgets', 'Widgets')}
-    {#if open.widgets}
-      <div class="ins-body">
-        {#each [{ kind: 'time', label: 'Time Widget' }, { kind: 'date', label: 'Date Widget' }] as w (w.kind)}
-          <div class="ins-toggle">
-            <span class="ins-toggle-icon" aria-hidden="true">
-              {#if w.kind === 'time'}
-                <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M8 5v3.2l2.1 1.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-              {:else}
-                <svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M2.5 6.6h11M5.5 2.3v2.4M10.5 2.3v2.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-              {/if}
-            </span>
-            <span>{w.label}</span>
-            <button
-              class="switch"
-              class:on={studio.hasWidget(w.kind)}
-              role="switch"
-              aria-checked={studio.hasWidget(w.kind)}
-              aria-label={w.label}
-              onclick={() => studio.toggleWidget(w.kind, !studio.hasWidget(w.kind))}
-            ><i></i></button>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </section>
 
   {#if isMedia}
     <section class="ins-card">

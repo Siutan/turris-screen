@@ -19,6 +19,7 @@
 html, body, #app {
   margin: 0;
   height: 100%;
+  min-width: 1280px;
   background: var(--canvas);
   color: var(--ink);
 }

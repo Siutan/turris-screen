@@ -206,8 +206,8 @@
       {/each}
       {#if studio.duration <= 0 && !loading}
         <div class="pv-empty">
-          <strong>Add media to start</strong>
-          <span>Pick pictures, GIFs, or videos from the media panel, or drop files anywhere.</span>
+          <strong>The canvas is empty</strong>
+          <span>Add media, text, or a widget from the left, or drop files anywhere.</span>
         </div>
       {/if}
     </div>

@@ -76,13 +76,38 @@
     }
   }
 
+  const widgets = [
+    { kind: 'time', label: 'Time', format: '12h', upper: false },
+    { kind: 'date', label: 'Date', format: 'short', upper: true },
+  ]
+
   function preview(kind, format, upper) {
     const { main, suffix } = widgetText({ type: kind, format }, now)
     const text = suffix ? `${main} ${suffix}` : main
     return upper ? text.toUpperCase() : text
   }
+
+  function widgetClipOf(kind) {
+    for (const track of studio.project.tracks) {
+      const clip = track.clips.find((c) => c.type === kind)
+      if (clip) return clip
+    }
+    return null
+  }
+
+  // Opening a widget turns it on if needed, then selects it so the inspector can edit it.
+  function focusWidget(kind) {
+    const clip = widgetClipOf(kind)
+    if (!clip) {
+      act(() => studio.toggleWidget(kind, true))
+      return
+    }
+    studio.select(clip.id)
+    if (studio.time < clip.start || studio.time >= clip.start + clip.duration) studio.seek(clip.start)
+  }
 </script>
 
+<aside class="st-library">
 <nav class="rail" aria-label="Editor tools">
   {#each [{ id: 'media', label: 'Media' }, { id: 'text', label: 'Text' }, { id: 'widget', label: 'Widget' }] as item (item.id)}
     <button class="rail-btn" class:on={view === item.id} onclick={() => (view = item.id)} aria-pressed={view === item.id}>
@@ -166,20 +191,29 @@
         </button>
       {/each}
     </div>
-    <p class="bin-note">Text goes on its own track at the playhead. Drag it in the preview to place it.</p>
+    <p class="bin-note">Text is added at the playhead. Select it on the canvas to edit it on the right.</p>
   {:else}
     <div class="bin-head"><h3>Widgets</h3></div>
     <div class="bin-list">
-      <button class="bin-widget" class:on={studio.hasWidget('time')} onclick={() => studio.toggleWidget('time', !studio.hasWidget('time'))}>
-        <span class="bin-widget-shot time">{preview('time', '12h')}</span>
-        <span class="bin-widget-copy"><strong>Time</strong><em>{studio.hasWidget('time') ? 'On · click to remove' : 'Click to add'}</em></span>
-      </button>
-      <button class="bin-widget" class:on={studio.hasWidget('date')} onclick={() => studio.toggleWidget('date', !studio.hasWidget('date'))}>
-        <span class="bin-widget-shot date">{preview('date', 'short', true)}</span>
-        <span class="bin-widget-copy"><strong>Date</strong><em>{studio.hasWidget('date') ? 'On · click to remove' : 'Click to add'}</em></span>
-      </button>
+      {#each widgets as w (w.kind)}
+        {@const on = studio.hasWidget(w.kind)}
+        <div class="bin-widget" class:on class:active={on && studio.selected?.clip?.type === w.kind}>
+          <button class="bin-widget-open" onclick={() => focusWidget(w.kind)}>
+            <span class="bin-widget-shot {w.kind}">{preview(w.kind, w.format, w.upper)}</span>
+            <span class="bin-widget-copy"><strong>{w.label}</strong><em>{on ? 'On the canvas' : 'Off'}</em></span>
+          </button>
+          <button
+            class="switch"
+            class:on
+            role="switch"
+            aria-checked={on}
+            aria-label="{on ? 'Turn off' : 'Turn on'} {w.label}"
+            onclick={() => act(() => studio.toggleWidget(w.kind, !on))}
+          ><i></i></button>
+        </div>
+      {/each}
     </div>
-    <p class="bin-note">Widgets are drawn into the clip when you save, so they show the time you saved it.</p>
+    <p class="bin-note">Turn a widget on here, then drag it on the canvas. Select it and its options show on the right. The saved clip shows the time from when you save.</p>
   {/if}
 </section>
 
@@ -189,3 +223,4 @@
       addMenuClosed = performance.now()
     }} />
 {/if}
+</aside>
