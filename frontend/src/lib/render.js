@@ -1,3 +1,4 @@
+import { paintEffect, syncEffects } from './effects.js'
 import { H, W, activeClips, filterCSS, isTextual, widgetText } from './project.js'
 
 let measureCtx
@@ -19,9 +20,11 @@ export function drawFrame(ctx, project, sources, t, now = new Date()) {
   ctx.globalAlpha = 1
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, W, H)
+  syncEffects(project)
   for (const { clip } of activeClips(project, t)) {
     if (clip.type === 'media') drawMedia(ctx, clip, sources, t)
     else if (isTextual(clip)) drawText(ctx, clip, now)
+    else if (clip.type === 'effect') paintEffect(ctx, clip, t)
   }
   ctx.restore()
 }
@@ -100,6 +103,7 @@ function drawText(ctx, clip, now) {
 
 // clipBounds is the on-canvas box of a clip, in 1280×720 units.
 export function clipBounds(clip, sources, now = new Date()) {
+  if (clip.type === 'effect') return { x: 0, y: 0, w: W, h: H }
   if (clip.type === 'media') {
     const entry = sources.get(clip.assetId)
     return mediaRect(clip, entry?.width, entry?.height)
@@ -114,6 +118,7 @@ export function hitTest(project, sources, t, x, y, { locked = false, now = new D
   const active = activeClips(project, t)
   for (let i = active.length - 1; i >= 0; i--) {
     const { clip } = active[i]
+    if (clip.type === 'effect') continue
     if (clip.locked && !locked) continue
     const b = clipBounds(clip, sources, now)
     const pad = isTextual(clip) ? 12 : 0

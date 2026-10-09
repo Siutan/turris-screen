@@ -1,5 +1,5 @@
 <script>
-  import { TEXT_PRESETS, widgetText } from '../lib/project.js'
+  import { EFFECT_PACKS, TEXT_PRESETS, widgetText } from '../lib/project.js'
   import ContextMenu from './ContextMenu.svelte'
 
   let {
@@ -109,15 +109,17 @@
 
 <aside class="st-library">
 <nav class="rail" aria-label="Editor tools">
-  {#each [{ id: 'media', label: 'Media' }, { id: 'text', label: 'Text' }, { id: 'widget', label: 'Widget' }] as item (item.id)}
+  {#each [{ id: 'media', label: 'Media' }, { id: 'text', label: 'Text' }, { id: 'widget', label: 'Widget' }, { id: 'effect', label: 'Effects' }] as item (item.id)}
     <button class="rail-btn" class:on={view === item.id} onclick={() => (view = item.id)} aria-pressed={view === item.id}>
       <span class="rail-icon" aria-hidden="true">
         {#if item.id === 'media'}
           <svg viewBox="0 0 20 20"><rect x="3" y="3.5" width="14" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M5.5 14l3.4-3.6 2.3 2.3 1.8-1.8 2.2 3.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /><circle cx="13" cy="7.3" r="1.2" fill="currentColor" /></svg>
         {:else if item.id === 'text'}
           <svg viewBox="0 0 20 20"><path d="M4.5 5h11M10 5v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-        {:else}
+        {:else if item.id === 'widget'}
           <svg viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4" /><rect x="11" y="3" width="6" height="6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4" /><rect x="3" y="11" width="6" height="6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4" /><rect x="11" y="11" width="6" height="6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
+        {:else}
+          <svg viewBox="0 0 20 20"><path d="M10 2.2l1.5 4.6 4.8.2-3.8 2.9 1.4 4.6L10 11.8 6.1 14.5l1.4-4.6L3.7 7l4.8-.2z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg>
         {/if}
       </span>
       {item.label}
@@ -125,7 +127,7 @@
   {/each}
 </nav>
 
-<section class="bin" aria-label={view === 'media' ? 'Media' : view === 'text' ? 'Text' : 'Widgets'}>
+<section class="bin" aria-label={view === 'media' ? 'Media' : view === 'text' ? 'Text' : view === 'effect' ? 'Effects' : 'Widgets'}>
   {#if view === 'media'}
     <div class="bin-head">
       <h3>Media</h3>
@@ -192,6 +194,17 @@
       {/each}
     </div>
     <p class="bin-note">Text is added at the playhead. Select it on the canvas to edit it on the right.</p>
+  {:else if view === 'effect'}
+    <div class="bin-head"><h3>Effects</h3></div>
+    <div class="bin-effects">
+      {#each EFFECT_PACKS as pack (pack.id)}
+        <h4 class="bin-pack">{pack.label}</h4>
+        {#each pack.effects as effect (effect.id)}
+          <button class="bin-preset" onclick={() => act(() => studio.addEffect(effect.id))}>{effect.label}</button>
+        {/each}
+      {/each}
+    </div>
+    <p class="bin-note">An effect covers the frame and changes whatever is on the tracks below it. Titles on a higher track stay sharp.</p>
   {:else}
     <div class="bin-head"><h3>Widgets</h3></div>
     <div class="bin-list">

@@ -371,6 +371,25 @@
 
 .bin-note { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; padding: 0 2px; }
 
+.bin-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bin-pack {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bin-pack:first-child { margin-top: 0; }
+
 /* Preview */
 
 .st-center {
@@ -1064,6 +1083,11 @@
   color: #2f3270;
 }
 
+.tl-clip.effect {
+  background: #d8c6f3;
+  color: #4a2d6b;
+}
+
 .tl-clip.missing {
   background: repeating-linear-gradient(135deg, #e6e8ec 0 8px, #f1f2f5 8px 16px);
   color: #8b9098;
@@ -1072,6 +1096,8 @@
 .tl-clip.selected { box-shadow: 0 0 0 2px var(--accent); }
 
 .tl-clip.text.selected { box-shadow: 0 0 0 2px #4b56c8; }
+
+.tl-clip.effect.selected { box-shadow: 0 0 0 2px #7a4bb5; }
 
 .tl-clip.selected.primary { box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px rgba(107, 120, 229, 0.28); }
 

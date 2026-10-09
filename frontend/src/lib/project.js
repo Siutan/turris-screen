@@ -64,6 +64,41 @@ export const TEXT_PRESETS = [
   { id: 'body', label: 'Add body text', text: 'Body text', size: 40, weight: 400 },
 ]
 
+// Built-in overlay packs. The painter in effects.js maps each id to Pixi filters.
+export const EFFECT_PACKS = [
+  {
+    id: 'weather',
+    label: 'Weather',
+    effects: [
+      { id: 'snow', label: 'Snow' },
+      { id: 'rain', label: 'Rain' },
+      { id: 'storm', label: 'Storm' },
+      { id: 'fog', label: 'Fog' },
+      { id: 'sun', label: 'Sun' },
+      { id: 'blizzard', label: 'Blizzard' },
+    ],
+  },
+  {
+    id: 'glitchpop',
+    label: 'Glitchpop',
+    effects: [
+      { id: 'glitch', label: 'Glitch' },
+      { id: 'duotone', label: 'Duotone wave' },
+      { id: 'vhs', label: 'VHS' },
+      { id: 'signal', label: 'Signal' },
+      { id: 'prism', label: 'Prism' },
+    ],
+  },
+]
+
+export function effectMeta(id) {
+  for (const pack of EFFECT_PACKS) {
+    const effect = pack.effects.find((item) => item.id === id)
+    if (effect) return { ...effect, packId: pack.id, packLabel: pack.label }
+  }
+  return null
+}
+
 export const TIME_FORMATS = [
   { id: '12h', label: '12-hour' },
   { id: '24h', label: '24-hour' },
@@ -121,6 +156,19 @@ export function textClip(preset, start, duration) {
     align: 'center',
     x: W / 2,
     y: H / 2,
+  }
+}
+
+export function effectClip(effectId, start, duration) {
+  const meta = effectMeta(effectId)
+  return {
+    id: uid('c'),
+    type: 'effect',
+    effect: effectId,
+    name: meta?.label || 'Effect',
+    start,
+    duration,
+    amount: 70,
   }
 }
 
@@ -214,7 +262,7 @@ export function projectKind(project, kindOfAsset) {
 }
 
 export function hasMotion(project, kindOfAsset) {
-  return allClips(project).some((c) => c.type === 'media' && ['video', 'gif'].includes(kindOfAsset(c.assetId)))
+  return allClips(project).some((c) => c.type === 'effect' || (c.type === 'media' && ['video', 'gif'].includes(kindOfAsset(c.assetId))))
 }
 
 // estimateBytes mirrors the encoder's bitrate choice. It is an upper bound: still
@@ -249,6 +297,7 @@ export function widgetText(clip, now) {
 
 export function clipLabel(clip, now = new Date()) {
   if (clip.type === 'text') return clip.text.split('\n')[0] || 'Text'
+  if (clip.type === 'effect') return effectMeta(clip.effect)?.label || clip.name || 'Effect'
   if (clip.type === 'time' || clip.type === 'date') {
     const { main, suffix } = widgetText(clip, now)
     return suffix ? `${main} ${suffix}` : main

@@ -1,3 +1,4 @@
+import { resetEffects } from './effects.js'
 import { H, W, activeClips, projectDuration } from './project.js'
 import { drawFrame } from './render.js'
 
@@ -14,6 +15,7 @@ export async function renderFrames({ project, sources, fps, api, signal, onProgr
   canvas.height = H
   const ctx = canvas.getContext('2d')
   sources.pauseAll()
+  resetEffects()
   const id = await api.BeginExport()
   try {
     let batch = []
@@ -23,7 +25,7 @@ export async function renderFrames({ project, sources, fps, api, signal, onProgr
       if (signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
       const t = i / fps
       const active = activeClips(project, t)
-      const moving = active.some(({ clip }) => sources.moving(clip))
+      const moving = active.some(({ clip }) => clip.type === 'effect' || sources.moving(clip))
       const key = active.map(({ clip }) => clip.id).join('|')
       let frame = lastFrame
       if (moving || key !== lastKey || !frame) {

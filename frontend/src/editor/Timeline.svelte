@@ -98,6 +98,7 @@
     if (!first) return 'empty'
     if (first.type === 'media') return 'media'
     if (first.type === 'text') return 'text'
+    if (first.type === 'effect') return 'effect'
     return 'widget'
   }
 
@@ -370,6 +371,8 @@
                 <svg viewBox="0 0 16 16"><path d="M3.5 4h9M8 4v8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
               {:else if trackIcon(track) === 'widget'}
                 <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2" /><path d="M8 5v3.2l2 1.3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
+              {:else if trackIcon(track) === 'effect'}
+                <svg viewBox="0 0 16 16"><path d="M8 1.8l1.2 3.6 3.8.2-3 2.3 1.1 3.6L8 9.4 4.9 11.5l1.1-3.6-3-2.3 3.8-.2z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" /></svg>
               {:else}
                 <svg viewBox="0 0 16 16"><path d="M8 2.8l5.5 3L8 8.8l-5.5-3z M2.5 10.2L8 13.2l5.5-3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /></svg>
               {/if}
@@ -384,6 +387,7 @@
                 class="tl-clip"
                 class:media={clip.type === 'media'}
                 class:text={isTextual(clip)}
+                class:effect={clip.type === 'effect'}
                 class:missing={missing(clip)}
                 class:selected={studio.isSelected(clip.id)}
                 class:primary={studio.selection.length > 1 && studio.selectedId === clip.id}
@@ -407,6 +411,8 @@
                 {#if isTextual(clip)}
                   <span class="tl-label"><b>T<small>T</small></b>{clipLabel(clip)}</span>
                   <span class="grip" aria-hidden="true">⋮</span>
+                {:else if clip.type === 'effect'}
+                  <span class="tl-label">{clipLabel(clip)}</span>
                 {:else if missing(clip)}
                   <span class="tl-label">Missing media</span>
                 {/if}
