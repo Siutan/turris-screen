@@ -467,6 +467,41 @@ export class Studio {
     return { minStart: 0, maxEnd: max }
   }
 
+  // sourceRange describes which part of a video clip's source plays: from and to are
+  // seconds into the source, and longest is how much the clip can grow to without
+  // passing the project limit or the next clip on its track.
+  sourceRange(id) {
+    const found = findClip(this.project, id)
+    if (!found || found.clip.type !== 'media') return null
+    const entry = this.sources.get(found.clip.assetId)
+    if (entry?.kind !== 'video' || !entry.duration) return null
+    const { clip, track } = found
+    const next = track.clips.reduce((min, c) => (c.id !== clip.id && c.start >= clip.start ? Math.min(min, c.start) : min), Infinity)
+    const from = clip.in || 0
+    return {
+      from,
+      to: from + clip.duration,
+      total: entry.duration,
+      longest: Math.max(MIN_CLIP, Math.min(this.limits.maxSeconds, next) - clip.start),
+    }
+  }
+
+  // setSourceRange picks the part of the source video a clip plays. The clip keeps its
+  // place on the timeline; its length follows the range, within sourceRange's limits.
+  setSourceRange(id, from, to, mergeKey = '') {
+    const range = this.sourceRange(id)
+    if (!range) return
+    let length = Math.max(MIN_CLIP, Math.min(to - from, range.longest))
+    from = Math.max(0, Math.min(from, range.total - MIN_CLIP))
+    length = Math.min(length, range.total - from)
+    if (Math.abs(from - range.from) < 1e-4 && Math.abs(from + length - range.to) < 1e-4) return
+    const { clip } = findClip(this.project, id)
+    this.edit(() => {
+      clip.in = round(from)
+      clip.duration = round(length)
+    }, mergeKey)
+  }
+
   // arrangeTarget finds the track a clip is stacked against when moving it in the given
   // direction ('front', 'forward', 'backward', 'back'). Only clips that share screen time count.
   arrangeTarget(id, where) {

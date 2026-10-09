@@ -1,6 +1,6 @@
 <script>
   import { onMount, tick, untrack } from 'svelte'
-  import { MIN_CLIP, clipEnd, clipLabel, isTextual } from '../lib/project.js'
+  import { MIN_CLIP, clipEnd, clipLabel, fmtSourceTime, isTextual } from '../lib/project.js'
   import { round } from '../lib/studio.svelte.js'
   import { clipMenu } from '../lib/menus.js'
   import ContextMenu from './ContextMenu.svelte'
@@ -9,6 +9,7 @@
 
   let menu = $state(null)
   let marquee = $state(null)
+  let slipping = $state(null)
 
   let mergeCheck = $derived(studio.canMerge())
   let canSplitNow = $derived.by(() => {
@@ -222,6 +223,7 @@
 
     const edge = event.target.closest('[data-edge]')?.dataset.edge
     if (edge && !clip.locked && studio.selection.length === 1) return trim(event, clip, edge)
+    if (event.altKey && !clip.locked && studio.sourceRange(clip.id)) return slip(event, clip)
 
     const group = studio.selectedClips
       .filter((f) => !f.clip.locked)
@@ -296,6 +298,32 @@
         }
       },
       up: () => studio.remember(before),
+    })
+  }
+
+  function clipTitle(clip) {
+    const base = `${clipLabel(clip)} · ${clip.duration.toFixed(1)}s`
+    if (clip.type !== 'media' || sources.get(clip.assetId)?.kind !== 'video') return base
+    const from = clip.in || 0
+    return `${base} · plays ${fmtSourceTime(from)}–${fmtSourceTime(from + clip.duration)} of the video. Alt-drag to pick a different part.`
+  }
+
+  // slip keeps a video clip in place and slides which part of the source it plays.
+  // Dragging right shows earlier footage, like pulling the film through a window.
+  function slip(event, clip) {
+    const range = studio.sourceRange(clip.id)
+    const length = range.to - range.from
+    const x0 = event.clientX
+    const key = `${clip.id}:slip:${x0}:${event.timeStamp}`
+    studio.playing = false
+    slipping = clip.id
+    track(window, {
+      move: (e) => {
+        const from = Math.max(0, Math.min(range.from - (e.clientX - x0) / pps, range.total - length))
+        studio.setSourceRange(clip.id, from, from + length, key)
+        if (studio.time < clip.start || studio.time > clipEnd(clip)) studio.seek(clip.start)
+      },
+      up: () => (slipping = null),
     })
   }
 
@@ -396,7 +424,7 @@
                 style:left="{clip.start * pps}px"
                 style:width="{Math.max(6, clip.duration * pps)}px"
                 style:background-image={clip.type === 'media' && poster(clip) ? `url(${poster(clip)})` : null}
-                title="{clipLabel(clip)} · {clip.duration.toFixed(1)}s"
+                title={clipTitle(clip)}
                 role="button"
                 tabindex="-1"
                 onpointerdown={(e) => clipDown(e, clip)}
@@ -415,6 +443,9 @@
                   <span class="tl-label">{clipLabel(clip)}</span>
                 {:else if missing(clip)}
                   <span class="tl-label">Missing media</span>
+                {/if}
+                {#if slipping === clip.id}
+                  <span class="tl-slip">{fmtSourceTime(clip.in || 0)} – {fmtSourceTime((clip.in || 0) + clip.duration)}</span>
                 {/if}
                 <span class="edge end" data-edge="end"></span>
               </div>

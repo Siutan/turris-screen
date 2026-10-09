@@ -1,9 +1,10 @@
 <script>
+  import SourceRange from './SourceRange.svelte'
   import { DATE_FORMATS, FILTERS, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, effectMeta, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
 
   let { studio, sources, assets, revision, onError } = $props()
 
-  let open = $state({ media: true, text: true, adjust: true, effect: true })
+  let open = $state({ media: true, source: true, text: true, adjust: true, effect: true })
   let mediaMenu = $state(false)
 
   let many = $derived(studio.selection.length > 1)
@@ -159,6 +160,17 @@
             <input type="range" min="0.1" max="4" step="0.01" value={clip.scale} style:--fill={fill(clip.scale, 0.1, 4)} oninput={(e) => set('scale', Number(e.currentTarget.value))} />
             <em>{Math.round(clip.scale * 100)}%</em>
           </label>
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  {#if isMedia && entry?.kind === 'video'}
+    <section class="ins-card">
+      {@render head('source', 'Video section')}
+      {#if open.source}
+        <div class="ins-body">
+          <SourceRange {studio} {clip} {revision} />
         </div>
       {/if}
     </section>

@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte'
   import { CancelYouTube, GetYouTubeTool, ImportYouTube } from '../../wailsjs/go/main/App.js'
   import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime.js'
+  import { parseTime } from '../lib/project.js'
 
   let { url: initialUrl = '', onClose, onImported } = $props()
 
@@ -16,14 +17,6 @@
   let input = $state(null)
 
   let progress = $state({ label: 'Starting', percent: 0 })
-
-  // parseTime reads "90", "1:30", or "1:02:03" as seconds. Blank is null.
-  function parseTime(text) {
-    const s = text.trim()
-    if (!s) return null
-    if (!/^\d+(:\d{1,2}){0,2}(\.\d+)?$/.test(s)) return NaN
-    return s.split(':').reduce((total, part) => total * 60 + Number(part), 0)
-  }
 
   // startFromLink picks up ?t=75 or ?t=1m15s from a shared link.
   function startFromLink(link) {

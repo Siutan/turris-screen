@@ -310,6 +310,23 @@ export function fmtClock(seconds) {
   return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`
 }
 
+// fmtSourceTime shows a point in a source video as m:ss.s, so short sections read exactly.
+export function fmtSourceTime(seconds) {
+  const tenths = Math.max(0, Math.round(seconds * 10))
+  const m = Math.floor(tenths / 600)
+  const s = (tenths % 600) / 10
+  return `${m}:${s < 10 ? '0' : ''}${s.toFixed(1)}`
+}
+
+// parseTime reads 90, 1:30, 1:30.5, or 1:02:03 as seconds. Empty text is null and
+// anything else is NaN.
+export function parseTime(text) {
+  const s = String(text ?? '').trim()
+  if (!s) return null
+  if (!/^\d+(:\d{1,2}){0,2}(\.\d+)?$/.test(s)) return NaN
+  return s.split(':').reduce((total, part) => total * 60 + Number(part), 0)
+}
+
 export function fmtBytes(bytes) {
   if (!bytes) return '0 KB'
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
