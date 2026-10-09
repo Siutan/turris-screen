@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { ActiveName, Apply, Connect, GetLibrary, Job, Remove, RestartCooler } from '../wailsjs/go/main/App.js'
   import { EventsOn, Quit, WindowMinimise, WindowToggleMaximise } from '../wailsjs/runtime/runtime.js'
+  import Brand from './Brand.svelte'
   import DeviceChip from './DeviceChip.svelte'
   import Editor from './editor/Editor.svelte'
 
@@ -18,6 +19,8 @@
   let hideTimer
   let jobWatch = 0
   let view = $state('home')
+  let chromeLead = $state(null)
+  let chromeTools = $state(null)
   let editing = $state('')
   let editorKey = $state(0)
   let filter = $state('all')
@@ -335,11 +338,20 @@
 
 <div class="app">
   <header class="chrome" role="toolbar" aria-label="Window" tabindex="-1" ondblclick={onTitleDblClick}>
+    <div class="chrome-lead" bind:this={chromeLead}>
+      {#if view !== 'edit'}
+        <Brand />
+      {/if}
+    </div>
     {#if job.active}
       <p class="job">{job.label} <em>{Math.round(job.percent)}%</em></p>
       <div class="meter" aria-hidden="true"><span style:width="{job.percent}%"></span></div>
     {/if}
     <div class="spacer"></div>
+    <div class="chrome-tools nodrag" bind:this={chromeTools}></div>
+    {#if view !== 'edit'}
+      <DeviceChip compact {status} {working} onConnect={connectQuietly} onRestart={restartCooler} />
+    {/if}
     <div class="wins nodrag">
       <button class="winbtn" aria-label="Minimise" onclick={() => windowAction(WindowMinimise)}>−</button>
       <button class="winbtn" aria-label="Maximise" onclick={() => windowAction(WindowToggleMaximise)}>□</button>
@@ -349,21 +361,6 @@
 
   <div class="shell" class:editing={view === 'edit'}>
     {#if view === 'home'}
-      <div class="topbar" role="banner" tabindex="-1" ondblclick={onTitleDblClick}>
-        <div class="brand">
-          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-            <g fill="currentColor">
-              <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(0 16 16)" />
-              <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(120 16 16)" />
-              <rect x="13.35" y="3.1" width="5.3" height="10.4" rx="2.65" transform="rotate(240 16 16)" />
-              <circle cx="16" cy="16" r="2.5" />
-            </g>
-          </svg>
-          Turris Studio
-        </div>
-        <DeviceChip {status} {working} onConnect={connectQuietly} onRestart={restartCooler} />
-      </div>
-
       {#if error}
         <p class="banner">{error}</p>
       {/if}
@@ -497,6 +494,8 @@
           {status}
           {working}
           {job}
+          {chromeLead}
+          {chromeTools}
           onClose={closeEditor}
           {onSaved}
           onConnect={connectQuietly}
