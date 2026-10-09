@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // MediaItem is one project in the library. RemoteName is empty until it has been exported.
@@ -234,6 +235,167 @@ func (l *Library) SaveProject(p ProjectSave, clipPath string, clipSize int64) (i
 		return MediaItem{}, "", "", err
 	}
 	return l.publicItem(stored), path, previous, nil
+}
+
+// Duplicate copies an editable project into a new library item. The copy gets its own
+// name and, when the original was exported, its own cooler file.
+func (l *Library) Duplicate(id string) (MediaItem, error) {
+	if l.dir == "" {
+		return MediaItem{}, fmt.Errorf("media library is unavailable")
+	}
+	if !assetID(id) {
+		return MediaItem{}, fmt.Errorf("that project is no longer in the library")
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	idx, err := l.readIndex()
+	if err != nil {
+		return MediaItem{}, err
+	}
+	var src *storedItem
+	used := make(map[string]bool, len(idx.Items))
+	for i := range idx.Items {
+		used[idx.Items[i].Name] = true
+		if idx.Items[i].ID == id {
+			src = &idx.Items[i]
+		}
+	}
+	if src == nil {
+		return MediaItem{}, fmt.Errorf("that project is no longer in the library")
+	}
+
+	data, err := os.ReadFile(filepath.Join(l.dir, src.ID+".project.json"))
+	if err != nil {
+		return MediaItem{}, fmt.Errorf("this item was made before the editor and cannot be duplicated")
+	}
+	name := copyName(src.Name, used)
+	data, err = withProjectName(data, name)
+	if err != nil {
+		return MediaItem{}, err
+	}
+	id, err = newID()
+	if err != nil {
+		return MediaItem{}, err
+	}
+
+	projectPath := filepath.Join(l.dir, id+".project.json")
+	if err := os.WriteFile(projectPath, data, 0o644); err != nil {
+		return MediaItem{}, err
+	}
+	thumbPath := filepath.Join(l.dir, id+".jpg")
+	if err := copyFile(filepath.Join(l.dir, src.ID+".jpg"), thumbPath); err != nil && !os.IsNotExist(err) {
+		os.Remove(projectPath)
+		return MediaItem{}, err
+	}
+
+	created := time.Now()
+	copy := storedItem{
+		ID:       id,
+		Name:     name,
+		Created:  created,
+		Kind:     src.Kind,
+		Draft:    true,
+		Duration: src.Duration,
+	}
+	clipPath := ""
+	if src.RemoteName != "" {
+		clipSrc := filepath.Join(l.dir, src.RemoteName)
+		info, statErr := os.Stat(clipSrc)
+		if statErr == nil && !info.IsDir() {
+			next := l.freshRemote(created, src.RemoteName)
+			clipPath = filepath.Join(l.dir, next)
+			if err := copyFile(clipSrc, clipPath); err != nil {
+				os.Remove(projectPath)
+				os.Remove(thumbPath)
+				return MediaItem{}, err
+			}
+			copy.RemoteName = next
+			copy.Size = info.Size()
+			copy.Draft = src.Draft
+		}
+	}
+
+	idx.Items = append(idx.Items, copy)
+	if err := l.writeIndex(idx); err != nil {
+		os.Remove(projectPath)
+		os.Remove(thumbPath)
+		if clipPath != "" {
+			os.Remove(clipPath)
+		}
+		return MediaItem{}, err
+	}
+	return l.publicItem(copy), nil
+}
+
+// freshRemote picks a cooler file name that is not already stored.
+func (l *Library) freshRemote(when time.Time, avoid string) string {
+	for i := 0; i < 50; i++ {
+		name := remoteName(when.Add(time.Duration(i) * time.Millisecond))
+		if name == avoid {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(l.dir, name)); os.IsNotExist(err) {
+			return name
+		}
+	}
+	return remoteName(when.Add(time.Second))
+}
+
+// copyName is "Name copy", then "Name copy 2", and so on.
+func copyName(name string, used map[string]bool) string {
+	base := strings.TrimSpace(name)
+	if base == "" {
+		base = "Untitled"
+	}
+	for n := 1; n < 1000; n++ {
+		suffix := " copy"
+		if n > 1 {
+			suffix = fmt.Sprintf(" copy %d", n)
+		}
+		candidate := cleanName(shorten(base, 80-len(suffix)) + suffix)
+		if candidate != "" && !used[candidate] {
+			return candidate
+		}
+	}
+	return cleanName(base + " copy")
+}
+
+func shorten(s string, max int) string {
+	if max <= 0 || s == "" {
+		return ""
+	}
+	if len(s) <= max {
+		return s
+	}
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
+	}
+	return strings.TrimSpace(s[:max])
+}
+
+// withProjectName sets the editor document's name and leaves every other field as it was.
+func withProjectName(data []byte, name string) ([]byte, error) {
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &doc); err != nil || doc == nil {
+		return nil, fmt.Errorf("the project could not be read")
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(name); err != nil {
+		return nil, err
+	}
+	doc["name"] = json.RawMessage(bytes.TrimSpace(buf.Bytes()))
+	buf.Reset()
+	if err := enc.Encode(doc); err != nil {
+		return nil, err
+	}
+	out := bytes.TrimSpace(buf.Bytes())
+	if !json.Valid(out) {
+		return nil, fmt.Errorf("the project could not be read")
+	}
+	return out, nil
 }
 
 // Project returns the editor JSON saved for a library item.

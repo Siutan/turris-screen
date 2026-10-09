@@ -20,6 +20,7 @@
   import MediaPanel from './MediaPanel.svelte'
   import Preview from './Preview.svelte'
   import Timeline from './Timeline.svelte'
+  import KlipyDialog from './KlipyDialog.svelte'
   import YouTubeDialog from './YouTubeDialog.svelte'
   import { estimateBytes, fmtBytes, hasMotion, newProject, projectKind } from '../lib/project.js'
   import { Sources } from '../lib/sources.js'
@@ -56,6 +57,7 @@
   let naming = $state(false)
   let dragging = $state(null)
   let youtube = $state(null)
+  let klipy = $state(false)
   let binTab = $state('image')
   let toastTimer
   let abort = null
@@ -120,6 +122,16 @@
     notify(`Added “${asset.name}” to Videos. Click it or drag it onto the timeline.`)
   }
 
+  function openKlipy() {
+    if (!hasBridge()) return fail('Start the desktop app to browse KLIPY.')
+    klipy = true
+  }
+
+  function klipyImported(asset) {
+    addAssets([asset])
+    binTab = asset.kind === 'video' ? 'video' : asset.kind === 'gif' ? 'gif' : 'image'
+  }
+
   let copied = $state(null)
 
   function copyClips({ cut = false } = {}) {
@@ -153,7 +165,7 @@
   }
 
   function onCopy(event) {
-    if (youtube || saving || leaving || typing(event.target) || !studio.selection.length) return
+    if (youtube || klipy || saving || leaving || typing(event.target) || !studio.selection.length) return
     if (window.getSelection()?.toString()) return
     const data = copyClips({ cut: event.type === 'cut' })
     if (!data) return
@@ -162,7 +174,7 @@
   }
 
   function onPaste(event) {
-    if (youtube || saving || leaving || typing(event.target)) return
+    if (youtube || klipy || saving || leaving || typing(event.target)) return
     const text = event.clipboardData?.getData('text/plain')?.trim() ?? ''
     const clips = decodeClips(text)
     if (clips) {
@@ -348,7 +360,7 @@
   }
 
   function onKey(event) {
-    if (saving || leaving || youtube) return
+    if (saving || leaving || youtube || klipy) return
     const mod = event.ctrlKey || event.metaKey
     const key = event.key.toLowerCase()
     if (mod && key === 's') {
@@ -533,6 +545,7 @@
       bind:tab={binTab}
       onImport={() => importFiles()}
       onYouTube={() => openYouTube()}
+      onKlipy={openKlipy}
       onRemoveAsset={removeAsset}
       onAssetDown={assetDown}
       onError={fail}
@@ -577,6 +590,10 @@
 
   {#if youtube}
     <YouTubeDialog url={youtube.url} onClose={() => (youtube = null)} onImported={youtubeImported} />
+  {/if}
+
+  {#if klipy}
+    <KlipyDialog onClose={() => (klipy = false)} onImported={klipyImported} />
   {/if}
 
   {#if leaving}

@@ -49,9 +49,9 @@
   >
     <span class="device-icon" aria-hidden="true">
       <svg viewBox="0 0 36 28">
-        <rect x="1.2" y="2" width="33.6" height="20" rx="4" fill="#f4f5f7" stroke="#d5d8de" />
-        <rect x="4.2" y="5" width="27.6" height="12.2" rx="2" fill="#d7dbe2" />
-        <path d="M13 25.2h10" stroke="#c5c9d1" stroke-width="1.8" stroke-linecap="round" />
+        <rect x="1.2" y="2" width="33.6" height="20" rx="4" fill="var(--device-bezel)" stroke="var(--device-stroke)" />
+        <rect x="4.2" y="5" width="27.6" height="12.2" rx="2" fill="var(--device-screen)" />
+        <path d="M13 25.2h10" stroke="var(--device-stand)" stroke-width="1.8" stroke-linecap="round" />
       </svg>
     </span>
     {#if compact}

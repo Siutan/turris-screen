@@ -4,6 +4,16 @@
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Turris Studio</title>
+    <script>
+      (function () {
+        var pref = 'auto'
+        try { pref = localStorage.getItem('turris-theme') || 'auto' } catch (e) {}
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        var theme = pref === 'dark' || pref === 'light' ? pref : (dark ? 'dark' : 'light')
+        document.documentElement.dataset.theme = theme
+        document.documentElement.style.colorScheme = theme
+      })()
+    </script>
 </head>
 <body>
 <div id="app"></div>

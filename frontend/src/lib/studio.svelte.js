@@ -440,6 +440,13 @@ export class Studio {
     this.#prune()
   }
 
+  // reorderTrack moves a whole track. Dragging calls this directly and records one undo step.
+  reorderTrack(from, to) {
+    if (from === to || from < 0 || to < 0 || to >= this.project.tracks.length) return
+    const [track] = this.project.tracks.splice(from, 1)
+    this.project.tracks.splice(to, 0, track)
+  }
+
   toggleTrack(index) {
     this.edit((p) => {
       p.tracks[index].hidden = !p.tracks[index].hidden

@@ -12,6 +12,7 @@
     tab = $bindable('image'),
     onImport,
     onYouTube,
+    onKlipy,
     onRemoveAsset,
     onAssetDown,
     onError,
@@ -30,6 +31,7 @@
       y: r.bottom + 6,
       items: [
         { label: 'From this PC…', run: () => onImport?.() },
+        { label: 'From KLIPY…', run: () => onKlipy?.() },
         { label: 'From YouTube…', run: () => onYouTube?.() },
       ],
     }
@@ -151,6 +153,7 @@
           Import from YouTube
         </button>
       {/if}
+      <button class="bin-yt" onclick={() => onKlipy?.()} disabled={importing}>Browse KLIPY</button>
     {:else}
       <div class="bin-grid">
         {#each shown as asset (asset.id)}

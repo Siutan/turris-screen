@@ -54,6 +54,7 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	loadDotEnv()
 	go a.Connect()
 }
 
@@ -96,6 +97,14 @@ func (a *App) GetProject(id string) (string, error) {
 func (a *App) SaveDraft(p ProjectSave) (MediaItem, error) {
 	item, _, _, err := a.library.SaveProject(p, "", 0)
 	return item, err
+}
+
+// Duplicate copies a library project into a new item.
+func (a *App) Duplicate(id string) (MediaItem, error) {
+	if a.library == nil {
+		return MediaItem{}, fmt.Errorf("media library is unavailable")
+	}
+	return a.library.Duplicate(id)
 }
 
 // GetAssets lists the media bin, newest first.
@@ -251,6 +260,65 @@ func (a *App) CancelYouTube() {
 	if cancel != nil {
 		cancel()
 	}
+}
+
+// SearchKlipy lists a page of GIFs, clips, stickers, memes, or AI emoji.
+// An empty query returns what KLIPY currently has trending.
+func (a *App) SearchKlipy(q KlipyQuery) (KlipyPage, error) {
+	c, err := newKlipyClient()
+	if err != nil {
+		return KlipyPage{}, err
+	}
+	ctx, cancel := a.klipyCtx(20 * time.Second)
+	defer cancel()
+	return c.search(ctx, q)
+}
+
+// ImportKlipy downloads one search result into the media bin.
+func (a *App) ImportKlipy(hit KlipyHit) (Asset, error) {
+	if a.media == nil {
+		return Asset{}, fmt.Errorf("the media bin is unavailable")
+	}
+	ctx, cancel := a.klipyCtx(45 * time.Second)
+	defer cancel()
+	file, dir, err := downloadKlipyFile(ctx, hit.FileURL)
+	if dir != "" {
+		defer os.RemoveAll(dir)
+	}
+	if err != nil {
+		return Asset{}, err
+	}
+	return a.media.ImportAs(file, klipyTitle(hit.Title, hit.Type))
+}
+
+// GenerateKlipyEmoji asks KLIPY to draw an emoji from a short description,
+// waits until it is ready, and adds it to the media bin.
+func (a *App) GenerateKlipyEmoji(prompt string) (Asset, error) {
+	if a.media == nil {
+		return Asset{}, fmt.Errorf("the media bin is unavailable")
+	}
+	c, err := newKlipyClient()
+	if err != nil {
+		return Asset{}, err
+	}
+	ctx, cancel := a.klipyCtx(90 * time.Second)
+	defer cancel()
+	file, dir, err := c.generateEmoji(ctx, prompt)
+	if dir != "" {
+		defer os.RemoveAll(dir)
+	}
+	if err != nil {
+		return Asset{}, err
+	}
+	return a.media.ImportAs(file, klipyTitle(prompt, "emoji"))
+}
+
+func (a *App) klipyCtx(d time.Duration) (context.Context, context.CancelFunc) {
+	parent := a.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	return context.WithTimeout(parent, d)
 }
 
 // RemoveAsset deletes a file from the media bin. Projects that used it show a gap.

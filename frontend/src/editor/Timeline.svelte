@@ -10,6 +10,7 @@
   let menu = $state(null)
   let marquee = $state(null)
   let slipping = $state(null)
+  let draggingTrack = $state(null)
 
   let mergeCheck = $derived(studio.canMerge())
   let canSplitNow = $derived.by(() => {
@@ -93,15 +94,6 @@
     }
     return out
   })
-
-  function trackIcon(track) {
-    const first = track.clips[0]
-    if (!first) return 'empty'
-    if (first.type === 'media') return 'media'
-    if (first.type === 'text') return 'text'
-    if (first.type === 'effect') return 'effect'
-    return 'widget'
-  }
 
   function poster(clip) {
     revision
@@ -327,6 +319,75 @@
     })
   }
 
+  function trackIndex(id) {
+    return studio.project.tracks.findIndex((t) => t.id === id)
+  }
+
+  function rowPitch() {
+    const rows = scroller.querySelectorAll('.tl-row:not(.adder)')
+    if (rows.length >= 2) return rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top
+    const row = rows[0]
+    const gap = parseFloat(getComputedStyle(row?.parentElement).rowGap) || 6
+    return (row?.getBoundingClientRect().height || 38) + gap
+  }
+
+  // grabTrack drags a row up or down. The top row stays in front of the ones below it.
+  function grabTrack(event, trackId) {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const start = trackIndex(trackId)
+    if (start < 0) return
+    const pitch = rowPitch()
+    const y0 = event.clientY
+    const before = studio.serialize()
+    let moved = false
+    draggingTrack = trackId
+    track(window, {
+      move: (e) => {
+        const target = Math.max(0, Math.min(studio.project.tracks.length - 1, start + Math.round((e.clientY - y0) / pitch)))
+        const from = trackIndex(trackId)
+        if (from < 0 || from === target) return
+        moved = true
+        studio.reorderTrack(from, target)
+      },
+      up: () => {
+        draggingTrack = null
+        if (moved) studio.remember(before)
+      },
+    })
+  }
+
+  function openTrackMenu(event, track) {
+    event.stopPropagation()
+    const only = studio.project.tracks.length < 2
+    menu = {
+      x: event.clientX,
+      y: event.clientY,
+      title: '',
+      trackId: track.id,
+      items: [
+        {
+          label: track.hidden ? 'Show track' : 'Hide track',
+          run: () => {
+            const i = trackIndex(track.id)
+            if (i >= 0) studio.toggleTrack(i)
+          },
+        },
+        {
+          label: 'Delete track',
+          danger: true,
+          disabled: only,
+          title: only ? 'At least one track is needed.' : '',
+          run: () => {
+            const i = trackIndex(track.id)
+            if (i >= 0) studio.removeTrack(i)
+          },
+        },
+      ],
+    }
+  }
+
   function act(fn) {
     try {
       fn()
@@ -383,31 +444,14 @@
 
     <div class="tl-rows">
       {#each studio.project.tracks as track, i (track.id)}
-        <div class="tl-row" class:hidden={track.hidden}>
+        <div class="tl-row" class:hidden={track.hidden} class:lifting={draggingTrack === track.id}>
           <div class="tl-gutter">
-            <button class="tl-eye" onclick={() => studio.toggleTrack(i)} aria-label={track.hidden ? 'Show track' : 'Hide track'} title={track.hidden ? 'Show track' : 'Hide track'}>
-              {#if track.hidden}
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8s2.2-4.5 6-4.5S14 8 14 8s-2.2 4.5-6 4.5S2 8 2 8z" fill="none" stroke="currentColor" stroke-width="1.3" /><path d="M3 13L13 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-              {:else}
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8s2.2-4.5 6-4.5S14 8 14 8s-2.2 4.5-6 4.5S2 8 2 8z" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="8" cy="8" r="1.9" fill="currentColor" /></svg>
-              {/if}
+            <button class="tl-grab" aria-label="Reorder track" title="Drag to reorder" onpointerdown={(e) => grabTrack(e, track.id)}>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="6" cy="3.5" r="1.05" fill="currentColor" /><circle cx="10" cy="3.5" r="1.05" fill="currentColor" /><circle cx="6" cy="8" r="1.05" fill="currentColor" /><circle cx="10" cy="8" r="1.05" fill="currentColor" /><circle cx="6" cy="12.5" r="1.05" fill="currentColor" /><circle cx="10" cy="12.5" r="1.05" fill="currentColor" /></svg>
             </button>
-            <span class="tl-kind" aria-hidden="true">
-              {#if trackIcon(track) === 'media'}
-                <svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.2" /><path d="M4.5 11l2.6-2.8 1.8 1.8 1.4-1.4 1.7 2.4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /><circle cx="10.4" cy="5.8" r="0.9" fill="currentColor" /></svg>
-              {:else if trackIcon(track) === 'text'}
-                <svg viewBox="0 0 16 16"><path d="M3.5 4h9M8 4v8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-              {:else if trackIcon(track) === 'widget'}
-                <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.2" /><path d="M8 5v3.2l2 1.3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
-              {:else if trackIcon(track) === 'effect'}
-                <svg viewBox="0 0 16 16"><path d="M8 1.8l1.2 3.6 3.8.2-3 2.3 1.1 3.6L8 9.4 4.9 11.5l1.1-3.6-3-2.3 3.8-.2z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" /></svg>
-              {:else}
-                <svg viewBox="0 0 16 16"><path d="M8 2.8l5.5 3L8 8.8l-5.5-3z M2.5 10.2L8 13.2l5.5-3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /></svg>
-              {/if}
-            </span>
-            {#if studio.project.tracks.length > 1}
-              <button class="tl-drop" onclick={() => studio.removeTrack(i)} aria-label="Remove track" title="Remove track">×</button>
-            {/if}
+            <button class="tl-kebab" class:on={menu?.trackId === track.id} aria-label="Track options" aria-haspopup="menu" title="Track options" onclick={(e) => openTrackMenu(e, track)}>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="3.5" r="1.15" fill="currentColor" /><circle cx="8" cy="8" r="1.15" fill="currentColor" /><circle cx="8" cy="12.5" r="1.15" fill="currentColor" /></svg>
+            </button>
           </div>
           <div class="tl-lane" data-track={i} role="presentation" onpointerdown={laneDown}>
             {#each track.clips as clip (clip.id)}
@@ -454,11 +498,7 @@
         </div>
       {/each}
       <div class="tl-row adder">
-        <div class="tl-gutter">
-          <span class="tl-kind" aria-hidden="true">
-            <svg viewBox="0 0 16 16"><path d="M8 2.8l5.5 3L8 8.8l-5.5-3z M2.5 10.2L8 13.2l5.5-3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /></svg>
-          </span>
-        </div>
+        <div class="tl-gutter"></div>
         <div class="tl-lane" data-track={studio.project.tracks.length}>
           <button class="tl-add" onclick={() => studio.addTrack()}>
             <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>

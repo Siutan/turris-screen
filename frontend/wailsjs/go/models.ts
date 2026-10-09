@@ -230,6 +230,78 @@ export namespace main {
 	        this.percent = source["percent"];
 	    }
 	}
+	export class KlipyHit {
+	    slug: string;
+	    title: string;
+	    type: string;
+	    preview: string;
+	    fileUrl: string;
+	    kind: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KlipyHit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.slug = source["slug"];
+	        this.title = source["title"];
+	        this.type = source["type"];
+	        this.preview = source["preview"];
+	        this.fileUrl = source["fileUrl"];
+	        this.kind = source["kind"];
+	    }
+	}
+	export class KlipyPage {
+	    items: KlipyHit[];
+	    page: number;
+	    hasNext: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new KlipyPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], KlipyHit);
+	        this.page = source["page"];
+	        this.hasNext = source["hasNext"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class KlipyQuery {
+	    type: string;
+	    query: string;
+	    page: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new KlipyQuery(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.query = source["query"];
+	        this.page = source["page"];
+	    }
+	}
 	
 	
 	export class YouTubeRequest {

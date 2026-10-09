@@ -1,10 +1,11 @@
 <script>
   import { onMount } from 'svelte'
-  import { ActiveName, Apply, Connect, GetLibrary, Job, Remove, RestartCooler } from '../wailsjs/go/main/App.js'
+  import { ActiveName, Apply, Connect, Duplicate, GetLibrary, Job, Remove, RestartCooler } from '../wailsjs/go/main/App.js'
   import { EventsOn, Quit, WindowMinimise, WindowToggleMaximise } from '../wailsjs/runtime/runtime.js'
   import Brand from './Brand.svelte'
   import DeviceChip from './DeviceChip.svelte'
   import Editor from './editor/Editor.svelte'
+  import { applyTheme, saveTheme, storedTheme } from './lib/theme.js'
 
   let status = $state({
     connected: false,
@@ -19,6 +20,7 @@
   let hideTimer
   let jobWatch = 0
   let view = $state('home')
+  let appearance = $state(storedTheme())
   let chromeLead = $state(null)
   let chromeTools = $state(null)
   let editing = $state('')
@@ -158,6 +160,18 @@
     }
   }
 
+  async function duplicateItem(id) {
+    menu = null
+    if (working) return
+    error = ''
+    try {
+      await Duplicate(id)
+      await refreshLibrary()
+    } catch (err) {
+      error = message(err)
+    }
+  }
+
   function openEditor(id = '') {
     menu = null
     error = ''
@@ -233,6 +247,11 @@
     }
   }
 
+  function chooseAppearance(next) {
+    appearance = next
+    saveTheme(next)
+  }
+
   function windowAction(fn) {
     try {
       fn()
@@ -306,6 +325,12 @@
   let sortLabel = $derived(sort === 'name' ? 'Name' : 'Recently Edited')
 
   onMount(() => {
+    applyTheme(appearance)
+    const themeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const onTheme = () => {
+      if (appearance === 'auto') applyTheme('auto')
+    }
+    themeQuery.addEventListener('change', onTheme)
     let stop = () => {}
     try {
       stop = EventsOn('progress', (update) => {
@@ -329,6 +354,7 @@
         error = message(err)
       })
     return () => {
+      themeQuery.removeEventListener('change', onTheme)
       if (typeof stop === 'function') stop()
       document.removeEventListener('click', closeMenu)
       document.removeEventListener('keydown', onKey)
@@ -350,6 +376,49 @@
     <div class="spacer"></div>
     <div class="chrome-tools nodrag" bind:this={chromeTools}></div>
     {#if view !== 'edit'}
+      <div class="theme nodrag" role="radiogroup" aria-label="Appearance">
+        <button
+          class="theme-opt"
+          class:on={appearance === 'auto'}
+          role="radio"
+          aria-checked={appearance === 'auto'}
+          aria-label="Auto"
+          title="Auto"
+          onclick={() => chooseAppearance('auto')}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.25" fill="none" stroke="currentColor" stroke-width="1.4" />
+            <path d="M8 2.75a5.25 5.25 0 0 1 0 10.5z" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          class="theme-opt"
+          class:on={appearance === 'light'}
+          role="radio"
+          aria-checked={appearance === 'light'}
+          aria-label="Light"
+          title="Light"
+          onclick={() => chooseAppearance('light')}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4" />
+            <path d="M8 1.7v1.5M8 12.8v1.5M1.7 8h1.5M12.8 8h1.5M3.4 3.4l1.05 1.05M11.55 11.55l1.05 1.05M3.4 12.6l1.05-1.05M11.55 4.45l1.05-1.05" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button
+          class="theme-opt"
+          class:on={appearance === 'dark'}
+          role="radio"
+          aria-checked={appearance === 'dark'}
+          aria-label="Dark"
+          title="Dark"
+          onclick={() => chooseAppearance('dark')}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M9.15 2.15a5 5 0 1 0 4.7 7.15A4.15 4.15 0 0 1 9.15 2.15z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
       <DeviceChip compact {status} {working} onConnect={connectQuietly} onRestart={restartCooler} />
     {/if}
     <div class="wins nodrag">
@@ -471,6 +540,7 @@
                   <div class="menu card-menu">
                     {#if item.editable}
                       <button onclick={() => openEditor(item.id)} disabled={working}>Edit</button>
+                      <button onclick={() => duplicateItem(item.id)} disabled={working}>Duplicate</button>
                     {/if}
                     {#if item.remoteName}
                       <button onclick={() => applyItem(item.id)} disabled={working || !status.connected}>

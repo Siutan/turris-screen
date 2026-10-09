@@ -16,7 +16,11 @@ export function CancelYouTube():Promise<void>;
 
 export function Connect():Promise<main.BridgeStatus>;
 
+export function Duplicate(arg1:string):Promise<main.MediaItem>;
+
 export function FinishExport(arg1:main.ExportRequest):Promise<main.ExportResult>;
+
+export function GenerateKlipyEmoji(arg1:string):Promise<main.Asset>;
 
 export function GetAssets():Promise<Array<main.Asset>>;
 
@@ -27,6 +31,8 @@ export function GetLibrary():Promise<Array<main.MediaItem>>;
 export function GetProject(arg1:string):Promise<string>;
 
 export function GetYouTubeTool():Promise<main.YouTubeTool>;
+
+export function ImportKlipy(arg1:main.KlipyHit):Promise<main.Asset>;
 
 export function ImportMedia():Promise<main.ImportResult>;
 
@@ -43,3 +49,5 @@ export function RemoveAsset(arg1:string):Promise<void>;
 export function RestartCooler():Promise<main.BridgeStatus>;
 
 export function SaveDraft(arg1:main.ProjectSave):Promise<main.MediaItem>;
+
+export function SearchKlipy(arg1:main.KlipyQuery):Promise<main.KlipyPage>;

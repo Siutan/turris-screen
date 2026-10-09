@@ -30,8 +30,16 @@ export function Connect() {
   return window['go']['main']['App']['Connect']();
 }
 
+export function Duplicate(arg1) {
+  return window['go']['main']['App']['Duplicate'](arg1);
+}
+
 export function FinishExport(arg1) {
   return window['go']['main']['App']['FinishExport'](arg1);
+}
+
+export function GenerateKlipyEmoji(arg1) {
+  return window['go']['main']['App']['GenerateKlipyEmoji'](arg1);
 }
 
 export function GetAssets() {
@@ -52,6 +60,10 @@ export function GetProject(arg1) {
 
 export function GetYouTubeTool() {
   return window['go']['main']['App']['GetYouTubeTool']();
+}
+
+export function ImportKlipy(arg1) {
+  return window['go']['main']['App']['ImportKlipy'](arg1);
 }
 
 export function ImportMedia() {
@@ -84,4 +96,8 @@ export function RestartCooler() {
 
 export function SaveDraft(arg1) {
   return window['go']['main']['App']['SaveDraft'](arg1);
+}
+
+export function SearchKlipy(arg1) {
+  return window['go']['main']['App']['SearchKlipy'](arg1);
 }
