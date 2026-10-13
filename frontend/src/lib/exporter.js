@@ -1,5 +1,6 @@
 import { resetEffects } from './effects.js'
 import { H, W, activeClips, projectDuration } from './project.js'
+import { isDeviceLabel } from './labels.js'
 import { drawFrame } from './render.js'
 
 const BATCH = 8
@@ -7,7 +8,7 @@ const QUALITY = 0.92
 
 // renderFrames draws every frame at fps and streams them to the Go side as JPEGs.
 // It returns the export id to finish. Frames where nothing moves reuse the last image.
-export async function renderFrames({ project, sources, fps, api, signal, onProgress, now = new Date(), values = null }) {
+export async function renderFrames({ project, sources, fps, api, signal, onProgress, now = new Date(), values = null, omitLabels = false }) {
   const duration = projectDuration(project)
   const total = Math.max(1, Math.round(duration * fps))
   const canvas = document.createElement('canvas')
@@ -30,7 +31,7 @@ export async function renderFrames({ project, sources, fps, api, signal, onProgr
       let frame = lastFrame
       if (moving || key !== lastKey || !frame) {
         await sources.prepare(active, t)
-        drawFrame(ctx, project, sources, t, now, values)
+        drawFrame(ctx, project, sources, t, now, values, omitLabels ? isDeviceLabel : null)
         frame = canvas.toDataURL('image/jpeg', QUALITY)
       }
       lastKey = moving ? '' : key
@@ -68,12 +69,12 @@ export async function thumbnail(project, sources, now = new Date(), values = nul
 }
 
 // renderStill draws the frame at time 0. Live updates send this instead of the whole timeline.
-export async function renderStill(project, sources, now = new Date(), values = null) {
+export async function renderStill(project, sources, now = new Date(), values = null, omitLabels = false) {
   const canvas = document.createElement('canvas')
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')
   if (sources) await sources.prepare(activeClips(project, 0), 0)
-  drawFrame(ctx, project, sources, 0, now, values)
+  drawFrame(ctx, project, sources, 0, now, values, omitLabels ? isDeviceLabel : null)
   return canvas.toDataURL('image/jpeg', QUALITY)
 }

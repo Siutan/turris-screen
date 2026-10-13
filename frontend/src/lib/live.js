@@ -6,10 +6,19 @@ import { resolveText } from './template.js'
 export const MOTION_MIN_MS = 2 * 60 * 1000
 
 // sourcesDue lists sources whose interval has elapsed. A source with no sample yet is due.
-export function sourcesDue(sources, fetched, nowMs) {
+function intervalMs(source, values) {
+  let sec = Math.max(1, Number(source.intervalSec) || 1)
+  if (source.config?.preset === 'sports') {
+    const status = String(values?.[source.id]?.fields?.status || '')
+    if (/live/i.test(status)) sec = 30
+  }
+  return sec * 1000
+}
+
+export function sourcesDue(sources, fetched, nowMs, values = null) {
   const out = []
   for (const source of sources || []) {
-    const interval = Math.max(1, Number(source.intervalSec) || 1) * 1000
+    const interval = intervalMs(source, values)
     const last = fetched?.[source.id]
     if (last == null || nowMs - last >= interval) out.push(source)
   }

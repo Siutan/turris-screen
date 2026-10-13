@@ -2,6 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { MOTION_MIN_MS, createSendGate, sourcesDue } from './live.js'
 
+test('a sports source polls quickly only while the game is live', () => {
+  const source = { id: 'g', intervalSec: 900, config: { preset: 'sports' } }
+  const quiet = { g: { fields: { status: 'FINAL' } } }
+  const live = { g: { fields: { status: 'LIVE' } } }
+  assert.equal(sourcesDue([source], { g: 0 }, 29000, quiet).length, 0)
+  assert.equal(sourcesDue([source], { g: 0 }, 30000, live).length, 1)
+  assert.equal(sourcesDue([source], { g: 0 }, 899000, quiet).length, 0)
+  assert.equal(sourcesDue([source], { g: 0 }, 900000, quiet).length, 1)
+})
+
 test('a source is due only after its interval', () => {
   const source = { id: 's', intervalSec: 5 }
   assert.equal(sourcesDue([source], {}, 1000).length, 1)

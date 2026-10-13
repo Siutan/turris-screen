@@ -31,12 +31,30 @@ type SourceSample struct {
 	Error  string            `json:"error,omitempty"`
 }
 
+// FetchRequest is one HTTPS GET. Headers come from the secret store, not the project.
+type FetchRequest struct {
+	URL     string
+	Headers map[string]string
+}
+
+// SourceSecret is stored beside the library, never inside a project.
+type SourceSecret struct {
+	Headers map[string]string `json:"headers,omitempty"`
+	Token   string            `json:"token,omitempty"`
+	User    string            `json:"user,omitempty"`
+	Pass    string            `json:"pass,omitempty"`
+}
+
 // Readers is the platform side of sampling. Tests pass fakes.
 type Readers struct {
 	System   func() (map[string]string, error)
 	Temps    func() (map[string]string, error)
 	Media    func() (map[string]string, error)
 	ReadFile func(path string, max int) ([]byte, error)
+	Fetch    func(FetchRequest) ([]byte, error)
+	Secret   func(id string) SourceSecret
+	Run      func(path string) (string, error)
+	Mail     func(host string, secret SourceSecret) (map[string]string, error)
 }
 
 func sampleAll(queries []SourceQuery, readers Readers) []SourceSample {
@@ -77,6 +95,20 @@ func sampleOne(query SourceQuery, readers Readers) (map[string]string, error) {
 			read = readSourceFile
 		}
 		return sampleFile(query.Config, read)
+	case "weather":
+		return sampleWeather(query, readers)
+	case "calendar":
+		return sampleCalendar(query, readers)
+	case "http":
+		return sampleHTTP(query, readers)
+	case "rss":
+		return sampleFeed(query, readers)
+	case "mail":
+		return sampleMail(query, readers)
+	case "command":
+		return sampleCommand(query, readers)
+	case "zone", "countdown", "focus":
+		return map[string]string{}, nil
 	default:
 		return nil, fmt.Errorf("that source is not available")
 	}

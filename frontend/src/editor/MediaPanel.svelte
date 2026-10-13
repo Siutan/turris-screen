@@ -1,6 +1,7 @@
 <script>
-  import { PickSourceFile } from '../../wailsjs/go/main/App.js'
+  import { GetSourceSecret, PickSourceFile, PickSourceProgram, SetSourceSecret } from '../../wailsjs/go/main/App.js'
   import { EFFECT_PACKS, SOURCE_KINDS, TEXT_PRESETS, hasMotion, widgetText } from '../lib/project.js'
+  import { isDeviceLabel } from '../lib/labels.js'
   import { MOTION_MIN_MS, ageLabel } from '../lib/live.js'
   import { session } from '../lib/session.svelte.js'
   import { tooltip } from '../lib/tooltip.js'
@@ -52,7 +53,7 @@
   let now = $state(new Date())
 
   $effect(() => {
-    const timer = setInterval(() => (now = new Date()), 15000)
+    const timer = setInterval(() => (now = new Date()), 1000)
     return () => clearInterval(timer)
   })
 
@@ -75,14 +76,18 @@
     return d < 10 ? `${d.toFixed(1)}s` : `${Math.round(d)}s`
   }
 
+  function tracksHaveLabels(project) {
+    return (project?.tracks || []).some((track) => (track.clips || []).some(isDeviceLabel))
+  }
+
   let kindOf = (id) => assets.find((asset) => asset.id === id)?.kind || 'image'
   let motion = $derived(hasMotion(studio.project, kindOf))
   let liveReason = $derived(!exported ? 'Save to the library and show it on the cooler before keeping this live.' : '')
   let liveDetail = $derived.by(() => {
     const parts = []
     if (liveReason) parts.push(liveReason)
-    if (motion) parts.push(`Video, GIF, and effect clips restart from the beginning. A new copy goes out at least ${MOTION_MIN_MS / 60000} minutes apart.`)
-    if (!parts.length) parts.push('The cooler updates while this app is open and Keep live is on.')
+    if (motion && !tracksHaveLabels(studio.project)) parts.push(`Video, GIF, and effect clips restart from the beginning. A new copy goes out at least ${MOTION_MIN_MS / 60000} minutes apart.`)
+    if (!parts.length) parts.push('Time, date, and fields update on the cooler while this app is open. Keep live leaves that running after you close the project.')
     return parts.join(' ')
   })
   let projectSources = $derived(studio.project.sources || [])
@@ -96,8 +101,99 @@
     return { label: age ? `OK · ${age}` : 'OK', bad: false }
   }
 
+  const uniqueKinds = new Set(['system', 'temps', 'media'])
+  const sourceButtons = ['countdown', 'zone', 'system', 'temps', 'media', 'weather', 'calendar', 'http', 'rss', 'mail', 'command', 'focus']
+  const presets = [
+    { preset: 'sports', name: 'Sports', intervalSec: 900 },
+    { preset: 'price', name: 'Price', intervalSec: 180 },
+    { preset: 'live', name: 'Live status', intervalSec: 180 },
+    { preset: 'ha', name: 'Home Assistant', intervalSec: 60 },
+    { preset: 'github', name: 'GitHub', intervalSec: 60 },
+  ]
+  let secrets = $state({})
+  let secretLoads = new Set()
+
+  function desktop() {
+    return typeof window !== 'undefined' && window.go?.main?.App
+  }
+
+  function usesSecret(source) {
+    return source.kind === 'mail' || source.kind === 'http'
+  }
+
+  $effect(() => {
+    if (!desktop()) return
+    for (const source of projectSources) {
+      if (!usesSecret(source) || secretLoads.has(source.id)) continue
+      secretLoads.add(source.id)
+      GetSourceSecret(source.id)
+        .then((secret) => {
+          secrets = { ...secrets, [source.id]: secret || {} }
+        })
+        .catch(() => {})
+    }
+  })
+
   function addSource(kind) {
     act(() => studio.addSource(kind))
+  }
+
+  function addPreset(preset) {
+    act(() => studio.addSource('http', { preset: preset.preset }, { name: preset.name, intervalSec: preset.intervalSec }))
+  }
+
+  function secretOf(id) {
+    return secrets[id] || {}
+  }
+
+  function headerName(id) {
+    return Object.keys(secretOf(id).headers || {})[0] || ''
+  }
+
+  async function saveSecret(id, patch) {
+    if (!desktop()) {
+      onError?.(new Error('Start the desktop app to store this.'))
+      return
+    }
+    const current = secretOf(id)
+    const next = {
+      headers: patch.headers ?? current.headers ?? {},
+      token: patch.token ?? current.token ?? '',
+      user: patch.user ?? current.user ?? '',
+      pass: patch.pass ?? current.pass ?? '',
+    }
+    secrets = { ...secrets, [id]: next }
+    try {
+      await SetSourceSecret(id, next)
+    } catch (err) {
+      onError?.(err)
+    }
+  }
+
+  function saveHeader(id, name, value) {
+    const headers = {}
+    if (name.trim() && value.trim()) headers[name.trim()] = value.trim()
+    saveSecret(id, { headers })
+  }
+
+  function setFocus(source, running) {
+    const minutes = Math.max(1, Number(source.config.minutes) || 25)
+    const end = running ? new Date(Date.now() + minutes * 60000).toISOString() : source.config.end
+    act(() => studio.updateSource(source.id, { config: { minutes, running, end } }))
+  }
+
+  async function chooseProgram(source) {
+    if (!desktop()) {
+      onError?.(new Error('Start the desktop app to choose a program.'))
+      return
+    }
+    try {
+      const path = await PickSourceProgram()
+      if (!path) return
+      act(() => studio.updateSource(source.id, { config: { path } }))
+    } catch (err) {
+      onError?.(err)
+    }
   }
 
   async function addFile() {
@@ -291,16 +387,20 @@
       ><i></i></button>
     </div>
     <div class="src-add">
-      {#each ['countdown', 'system', 'temps', 'media'] as kind (kind)}
+      {#each sourceButtons as kind (kind)}
         {@const spec = SOURCE_KINDS[kind]}
-        {@const taken = kind !== 'countdown' && projectSources.some((source) => source.kind === kind)}
+        {@const taken = uniqueKinds.has(kind) && projectSources.some((source) => source.kind === kind)}
         <button onclick={() => addSource(kind)} disabled={taken}>{taken ? spec.label : `Add ${spec.label.toLowerCase()}`}</button>
+      {/each}
+      {#each presets as preset (preset.preset)}
+        <button onclick={() => addPreset(preset)}>Add {preset.name.toLowerCase()}</button>
       {/each}
       <button onclick={addFile}>Add file</button>
     </div>
     {#each projectSources as source (source.id)}
       {@const spec = SOURCE_KINDS[source.kind]}
       {@const state = sourceState(source)}
+      {@const preset = source.config?.preset || ''}
       <div class="src-row">
         <div class="src-copy">
           <strong>{source.name}</strong>
@@ -309,6 +409,8 @@
         {#if source.kind === 'countdown'}
           <input class="src-input" value={source.config.label} aria-label="Countdown label" onchange={(e) => act(() => studio.updateSource(source.id, { config: { label: e.currentTarget.value } }))} />
           <input class="src-input" type="datetime-local" value={source.config.target} aria-label="Countdown target" onchange={(e) => act(() => studio.updateSource(source.id, { config: { target: e.currentTarget.value } }))} />
+        {:else if source.kind === 'zone'}
+          <input class="src-input" value={source.config.zone} placeholder="Europe/London" aria-label="Time zone" onchange={(e) => act(() => studio.updateSource(source.id, { config: { zone: e.currentTarget.value } }))} />
         {:else if source.kind === 'file'}
           <p class="src-path" title={source.config.path}>{source.config.path || 'No file'}</p>
           <div class="src-file">
@@ -320,17 +422,65 @@
               <input class="src-input" value={source.config.field} placeholder="score.home" aria-label="JSON field" onchange={(e) => act(() => studio.updateSource(source.id, { config: { field: e.currentTarget.value } }))} />
             {/if}
           </div>
+        {:else if source.kind === 'weather'}
+          <input class="src-input" value={source.config.place} placeholder="City" aria-label="City" onchange={(e) => act(() => studio.updateSource(source.id, { config: { place: e.currentTarget.value } }))} />
+        {:else if source.kind === 'calendar' || source.kind === 'rss'}
+          <input class="src-input" value={source.config.url} placeholder="https://" aria-label={source.kind === 'calendar' ? 'Calendar address' : 'Feed address'} onchange={(e) => act(() => studio.updateSource(source.id, { config: { url: e.currentTarget.value } }))} />
+        {:else if source.kind === 'http' && preset === 'ha'}
+          <input class="src-input" value={source.config.base} placeholder="https://home.local" aria-label="Home Assistant address" onchange={(e) => act(() => studio.updateSource(source.id, { config: { base: e.currentTarget.value } }))} />
+          <input class="src-input" value={source.config.entity} placeholder="sensor.temperature" aria-label="Entity" onchange={(e) => act(() => studio.updateSource(source.id, { config: { entity: e.currentTarget.value } }))} />
+          <input class="src-input" type="password" value={secretOf(source.id).token || ''} placeholder="Token" aria-label="Home Assistant token" onchange={(e) => saveSecret(source.id, { token: e.currentTarget.value })} />
+        {:else if source.kind === 'http' && preset === 'github'}
+          <input class="src-input" value={source.config.repo} placeholder="owner/name" aria-label="Repository" onchange={(e) => act(() => studio.updateSource(source.id, { config: { repo: e.currentTarget.value } }))} />
+          <input class="src-input" type="password" value={secretOf(source.id).token || ''} placeholder="Token, optional" aria-label="GitHub token" onchange={(e) => saveSecret(source.id, { token: e.currentTarget.value })} />
+        {:else if source.kind === 'http'}
+          <input class="src-input" value={source.config.url} placeholder="https://" aria-label="JSON address" onchange={(e) => act(() => studio.updateSource(source.id, { config: { url: e.currentTarget.value } }))} />
+          <input class="src-input" value={source.config.field} placeholder={preset === 'price' ? 'price' : preset === 'live' ? 'title' : 'score.home'} aria-label="JSON field" onchange={(e) => act(() => studio.updateSource(source.id, { config: { field: e.currentTarget.value } }))} />
+          {#if preset === 'sports' || preset === 'live'}
+            <input class="src-input" value={source.config.status} placeholder="status" aria-label="Status field" onchange={(e) => act(() => studio.updateSource(source.id, { config: { status: e.currentTarget.value } }))} />
+          {/if}
+          {#if preset === 'sports'}
+            <p class="src-path">Checks every 30 seconds while the status says live, and this interval otherwise.</p>
+          {/if}
+          {#if preset === 'price'}
+            <input class="src-input" value={source.config.change} placeholder="change" aria-label="Change field" onchange={(e) => act(() => studio.updateSource(source.id, { config: { change: e.currentTarget.value } }))} />
+          {/if}
+          <div class="src-file">
+            <input class="src-input" value={headerName(source.id)} placeholder="Header" aria-label="Header name" onchange={(e) => saveHeader(source.id, e.currentTarget.value, secretOf(source.id).headers?.[headerName(source.id)] || '')} />
+            <input class="src-input" type="password" value={secretOf(source.id).headers?.[headerName(source.id)] || ''} placeholder="Value" aria-label="Header value" onchange={(e) => saveHeader(source.id, headerName(source.id), e.currentTarget.value)} />
+          </div>
+        {:else if source.kind === 'mail'}
+          <input class="src-input" value={source.config.host} placeholder="imap.example.com" aria-label="Mail server" onchange={(e) => act(() => studio.updateSource(source.id, { config: { host: e.currentTarget.value } }))} />
+          <input class="src-input" value={secretOf(source.id).user || ''} placeholder="Account" aria-label="Mail account" onchange={(e) => saveSecret(source.id, { user: e.currentTarget.value })} />
+          <input class="src-input" type="password" value={secretOf(source.id).pass || ''} placeholder="Password" aria-label="Mail password" onchange={(e) => saveSecret(source.id, { pass: e.currentTarget.value })} />
+          <p class="src-path">Unread count and the latest subject. Stays off until the account is saved.</p>
+        {:else if source.kind === 'command'}
+          <p class="src-path">This program runs on this PC.</p>
+          <p class="src-path" title={source.config.path}>{source.config.path || 'No program'}</p>
+          <button class="src-action" type="button" onclick={() => chooseProgram(source)}>Choose program</button>
+          <label class="src-check">
+            <input type="checkbox" checked={!!source.config.confirmed} onchange={(e) => act(() => studio.updateSource(source.id, { config: { confirmed: e.currentTarget.checked } }))} />
+            I understand this runs on this PC
+          </label>
+        {:else if source.kind === 'focus'}
+          <label class="src-interval">
+            <span>Minutes</span>
+            <input type="number" min="1" step="1" value={source.config.minutes} aria-label="Focus minutes" onchange={(e) => act(() => studio.updateSource(source.id, { config: { minutes: Number(e.currentTarget.value) } }))} />
+          </label>
+          <button class="src-action" type="button" onclick={() => setFocus(source, !source.config.running)}>{source.config.running ? 'Stop' : 'Start'}</button>
         {/if}
-        <label class="src-interval">
-          <span>Every</span>
-          <input type="number" min={spec.min} step="1" value={source.intervalSec} aria-label="{source.name} interval" onchange={(e) => act(() => studio.updateSource(source.id, { intervalSec: Number(e.currentTarget.value) }))} />
-          <span>s</span>
-        </label>
+        {#if source.kind !== 'focus'}
+          <label class="src-interval">
+            <span>Every</span>
+            <input type="number" min={spec.min} step="1" value={source.intervalSec} aria-label="{source.name} interval" onchange={(e) => act(() => studio.updateSource(source.id, { intervalSec: Number(e.currentTarget.value) }))} />
+            <span>s</span>
+          </label>
+        {/if}
         <button class="src-remove" onclick={() => act(() => studio.removeSource(source.id))}>Remove</button>
       </div>
     {/each}
     {#if session.lastError}<p class="bin-note bad">{session.lastError}</p>{/if}
-    <p class="bin-note">Turn a widget on here, then drag it on the canvas. The cooler updates while this app is open and Keep live is on.</p>
+    <p class="bin-note">Time, date, and fields update on the cooler while this app is open. Keep live leaves that running after you close the project.</p>
     </div>
   {/if}
 </section>

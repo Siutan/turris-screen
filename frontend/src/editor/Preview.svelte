@@ -174,7 +174,7 @@
     stage.addEventListener('wheel', onWheel, { passive: false })
     const onFull = () => (full = document.fullscreenElement === wrap)
     document.addEventListener('fullscreenchange', onFull)
-    const clock = setInterval(schedule, 10000)
+    const clock = setInterval(schedule, 1000)
     schedule()
     return () => {
       ro.disconnect()

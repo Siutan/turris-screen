@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"turris-screen/turris"
 )
 
 // App is the Wails binding surface for the cooler display.
@@ -28,6 +31,8 @@ type App struct {
 	ytMu     sync.Mutex
 	ytCancel context.CancelFunc
 	stats    hostStats
+	secrets  *secretStore
+	quitting atomic.Bool
 }
 
 // BridgeStatus is what the window shows about the cooler connection.
@@ -50,6 +55,7 @@ func NewApp() *App {
 		bridge:  NewBridge(),
 		library: lib,
 		media:   bin,
+		secrets: openSecrets(),
 	}
 }
 
@@ -57,11 +63,28 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	loadDotEnv()
 	go warmTools()
+	startTray(a)
 	go a.Connect()
 }
 
 func (a *App) shutdown(context.Context) {
+	stopTray()
 	a.bridge.Close()
+}
+
+// beforeClose hides the window into the tray. The tray Exit command is the
+// path that actually ends the process.
+func (a *App) beforeClose(ctx context.Context) bool {
+	if !hideOnClose(a.quitting.Load(), trayActive()) {
+		return false
+	}
+	runtime.WindowHide(ctx)
+	return true
+}
+
+// hideOnClose reports whether the window close should leave the process running.
+func hideOnClose(quitting, trayReady bool) bool {
+	return trayReady && !quitting
 }
 
 // Connect opens the KANALI bridge. Quit KANALI first; it holds the same pipe.
@@ -403,6 +426,9 @@ func (a *App) FinishExport(req ExportRequest) (ExportResult, error) {
 		a.progress("Saved to the library", 100)
 		return result, nil
 	}
+	if req.Labels != nil {
+		_ = a.bridge.StageLabels(req.Labels)
+	}
 	if err := a.publishFrom(item.RemoteName, path, 50); err != nil {
 		result.ShowError = err.Error()
 		a.progress("Saved to the library", 100)
@@ -424,6 +450,25 @@ type StillRequest struct {
 type ClipRequest struct {
 	ProjectID string `json:"projectId"`
 	ExportID  string `json:"exportId"`
+}
+
+// SetLabels replaces the text layer on the clip that is playing. An empty list clears it.
+func (a *App) SetLabels(groups []turris.OverlayGroup) error {
+	if !a.bridge.Connected() {
+		return fmt.Errorf("cooler is not connected")
+	}
+	if groups == nil {
+		groups = []turris.OverlayGroup{}
+	}
+	return a.bridge.SetLabels(groups)
+}
+
+// UpdateLabelText replaces the strings on labels already on screen.
+func (a *App) UpdateLabelText(items []turris.OverlayText) error {
+	if !a.bridge.Connected() {
+		return fmt.Errorf("cooler is not connected")
+	}
+	return a.bridge.UpdateLabelText(items)
 }
 
 // RefreshStill encodes one frame and shows it in place of the project's current clip.
@@ -522,6 +567,11 @@ func (a *App) RefreshClip(req ClipRequest) error {
 	return nil
 }
 
+// GetSourceSecret returns the token or headers stored for one source.
+func (a *App) GetSourceSecret(id string) SourceSecret {
+	return a.secretFor(id)
+}
+
 // PickSourceFile asks for a text or JSON file a live source can read.
 func (a *App) PickSourceFile() (string, error) {
 	if a.ctx == nil {
@@ -531,6 +581,20 @@ func (a *App) PickSourceFile() (string, error) {
 		Title: "Choose a text or JSON file",
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Text and JSON (*.txt;*.json;*.log)", Pattern: "*.txt;*.json;*.log"},
+			{DisplayName: "All files", Pattern: "*.*"},
+		},
+	})
+}
+
+// PickSourceProgram asks for a program a command source will run on this PC.
+func (a *App) PickSourceProgram() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("start the desktop app to choose a program")
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Choose a program",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Programs (*.exe)", Pattern: "*.exe"},
 			{DisplayName: "All files", Pattern: "*.*"},
 		},
 	})

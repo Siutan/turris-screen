@@ -90,6 +90,74 @@ func TestUploadChunksAndPlay(t *testing.T) {
 	}
 }
 
+func TestSetLabelsUsesTheTextLayer(t *testing.T) {
+	link := &scriptLink{reads: [][]byte{nil}}
+	dev := newDevice(link)
+	dev.alive = true
+	err := dev.SetLabels([]OverlayGroup{{
+		ID: 110, X: 30, Y: 300, W: 400, H: 80, Align: 1,
+		Labels: []OverlayLabel{{ID: 132, Text: "12:31", Size: 64, Color: 0xffffff, Font: "roboto-regular"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := Parse(link.writes[0][8:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields[OpApply]; !ok {
+		t.Fatal("missing run config")
+	}
+	if !bytes.Contains(link.writes[0], []byte("12:31")) {
+		t.Fatal("label text was not sent")
+	}
+	link.reads = [][]byte{nil}
+	if err := dev.UpdateLabelText([]OverlayText{{GroupID: 110, LabelID: 132, Text: "12:32"}}); err != nil {
+		t.Fatal(err)
+	}
+	fields, err = Parse(link.writes[1][8:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields[OpLabels]; !ok {
+		t.Fatal("missing text update")
+	}
+	if !bytes.Contains(link.writes[1], []byte("12:32")) {
+		t.Fatal("updated text was not sent")
+	}
+}
+
+func TestPlaySendsStagedLabels(t *testing.T) {
+	name := "clip.mp4.h264_1280x720"
+	work := fieldBytes(3, []byte(name))
+	display := append(fieldVarint(1, 1), fieldVarint(2, 40)...)
+	cfg := Frame(fieldBytes(504, append(fieldBytes(3, work), fieldBytes(5, display)...)))
+	link := &scriptLink{reads: [][]byte{cfg, nil, nil, ack(), nil}}
+	dev := newDevice(link)
+	dev.alive = true
+	dev.StageLabels([]OverlayGroup{{
+		ID: 110, X: 30, Y: 300, W: 400, H: 80, Align: 2,
+		Labels: []OverlayLabel{{ID: 132, Text: "12:31", Size: 64, Color: 0xffffff, Font: "roboto-regular"}},
+	}})
+	if err := dev.Play(name); err != nil {
+		t.Fatal(err)
+	}
+	if len(link.writes) < 4 {
+		t.Fatalf("writes %d", len(link.writes))
+	}
+	last := link.writes[len(link.writes)-1]
+	if !bytes.Contains(last, []byte("12:31")) {
+		t.Fatal("play did not send the staged text")
+	}
+	fields, err := Parse(last[8:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields[OpApply]; !ok {
+		t.Fatal("staged text was not a run config")
+	}
+}
+
 func TestRemoveIgnoresAQuietPanel(t *testing.T) {
 	link := &scriptLink{reads: [][]byte{nil}}
 	dev := newDevice(link)

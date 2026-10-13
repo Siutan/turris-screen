@@ -18,9 +18,9 @@ const (
 	OpGetIdentity   = 102
 	OpGetFileList   = 103
 	OpGetUserConfig = 104
-	OpRunConfig     = 200
-	OpApply         = 201
-	OpLabels        = 300
+	OpRunConfig     = 200 // CMD_Set_UserConfig. The payload is the stored clip and backlight.
+	OpApply         = 201 // CMD_Set_RunConfig. The payload is the label layer. Empty clears it.
+	OpLabels        = 300 // CMD_Update_UIItemText. Replaces label strings without touching the clip.
 	OpFileBegin     = 400
 	OpFileData      = 401
 	OpFileEnd       = 402
@@ -70,6 +70,10 @@ func putVarint(v uint64) []byte {
 
 func fieldVarint(field int, v uint64) []byte {
 	return append(putVarint(uint64(field<<3)), putVarint(v)...)
+}
+
+func zigzag32(n int32) uint64 {
+	return uint64(uint32(n<<1) ^ uint32(n>>31))
 }
 
 func fieldBytes(field int, data []byte) []byte {
@@ -222,6 +226,88 @@ func BuildRunConfig(active, poweron, standby string, brightness, backlight int, 
 
 func BuildApply(trackID uint64) []byte {
 	return Envelope(OpApply, nil, trackID)
+}
+
+// OverlayLabel is one line inside a label group. IDs stay stable so a later text
+// update can find the same line.
+type OverlayLabel struct {
+	ID    uint32 `json:"id"`
+	Line  uint32 `json:"line"`
+	Text  string `json:"text"`
+	Size  uint32 `json:"size"`
+	Color uint32 `json:"color"`
+	Font  string `json:"font"`
+}
+
+// OverlayGroup is one box of text on the 1280×720 frame. Align is the device enum:
+// 1 left, 2 center, 3 right.
+type OverlayGroup struct {
+	ID     uint32         `json:"id"`
+	X      uint32         `json:"x"`
+	Y      uint32         `json:"y"`
+	W      uint32         `json:"w"`
+	H      uint32         `json:"h"`
+	Align  uint32         `json:"align"`
+	Labels []OverlayLabel `json:"labels"`
+}
+
+// OverlayText is one string in a CMD_Update_UIItemText batch.
+type OverlayText struct {
+	GroupID uint32 `json:"groupId"`
+	LabelID uint32 `json:"labelId"`
+	Text    string `json:"text"`
+}
+
+// BuildLabelConfig is the run-config message KANALI sends with the label layout.
+// The clip itself is unchanged. An empty list clears the layer.
+func BuildLabelConfig(groups []OverlayGroup, trackID uint64) []byte {
+	var payload []byte
+	for _, group := range groups {
+		payload = append(payload, fieldBytes(1, encodeLabelGroup(group))...)
+	}
+	return Envelope(OpApply, payload, trackID)
+}
+
+// BuildLabelText is the one-second text push. Layout, font, and position stay as they were.
+func BuildLabelText(items []OverlayText, trackID uint64) []byte {
+	var payload []byte
+	for _, item := range items {
+		line := append(fieldVarint(1, uint64(item.LabelID)), fieldBytes(2, []byte(item.Text))...)
+		group := append(fieldVarint(1, uint64(item.GroupID)), fieldBytes(2, line)...)
+		payload = append(payload, fieldBytes(1, group)...)
+	}
+	return Envelope(OpLabels, payload, trackID)
+}
+
+func encodeLabelGroup(group OverlayGroup) []byte {
+	msg := fieldVarint(1, uint64(group.ID))
+	msg = append(msg, fieldVarint(2, uint64(group.X))...)
+	msg = append(msg, fieldVarint(3, uint64(group.Y))...)
+	msg = append(msg, fieldVarint(4, uint64(group.W))...)
+	msg = append(msg, fieldVarint(5, uint64(group.H))...)
+	if group.Align != 0 {
+		msg = append(msg, fieldVarint(6, uint64(group.Align))...)
+	}
+	// KANALI sends a small negative line gap. The panel uses it when it places the lines.
+	msg = append(msg, fieldVarint(7, zigzag32(-10))...)
+	for _, label := range group.Labels {
+		msg = append(msg, fieldBytes(8, encodeLabel(label))...)
+	}
+	return msg
+}
+
+func encodeLabel(label OverlayLabel) []byte {
+	msg := fieldVarint(1, uint64(label.ID))
+	msg = append(msg, fieldVarint(2, uint64(label.Line))...)
+	if label.Font != "" {
+		msg = append(msg, fieldBytes(8, []byte(label.Font))...)
+	}
+	if label.Size != 0 {
+		msg = append(msg, fieldVarint(9, uint64(label.Size))...)
+	}
+	msg = append(msg, fieldVarint(10, uint64(label.Color))...)
+	msg = append(msg, fieldBytes(11, []byte(label.Text))...)
+	return msg
 }
 
 func BuildFileBegin(name string, total int, trackID uint64) []byte {

@@ -102,18 +102,36 @@ export const FILTER_LIBRARY = FILTER_GROUPS.map((group) => ({
   filters: FILTERS.filter((filter) => filter.group === group.id),
 }))
 
+// These are the faces built into the cooler. A label can only name one of them.
 export const FONTS = [
-  'Segoe UI',
-  'Segoe UI Variable Display',
-  'Bahnschrift',
-  'Arial',
-  'Verdana',
-  'Trebuchet MS',
-  'Georgia',
-  'Times New Roman',
-  'Consolas',
-  'Impact',
+  { id: 'roboto-regular', label: 'Roboto' },
+  { id: 'roboto-thin', label: 'Roboto Thin' },
+  { id: 'BitcountSingle-Regular', label: 'Bitcount Single' },
+  { id: 'Orbitron-Regular', label: 'Orbitron' },
+  { id: 'RubikGlitch-Regular', label: 'Rubik Glitch' },
 ]
+
+const LEGACY_FONTS = {
+  'Segoe UI': 'roboto-regular',
+  'Segoe UI Variable Display': 'Orbitron-Regular',
+  Bahnschrift: 'roboto-regular',
+  Arial: 'roboto-regular',
+  Verdana: 'roboto-regular',
+  'Trebuchet MS': 'roboto-regular',
+  Georgia: 'roboto-regular',
+  'Times New Roman': 'roboto-regular',
+  Consolas: 'roboto-regular',
+  Impact: 'Orbitron-Regular',
+}
+
+// coolerFont is the face name the panel will accept for this clip.
+export function coolerFont(clip) {
+  const chosen = clip?.font || ''
+  const known = FONTS.some((font) => font.id === chosen)
+  let name = known ? chosen : LEGACY_FONTS[chosen] || 'roboto-regular'
+  if (name === 'roboto-regular' && Number(clip?.weight) <= 300) name = 'roboto-thin'
+  return name
+}
 
 export const WEIGHTS = [
   { value: 300, label: 'Light' },
@@ -138,6 +156,16 @@ export const SOURCE_KINDS = {
     fields: [
       { id: 'remaining', label: 'Remaining' },
       { id: 'label', label: 'Label' },
+    ],
+  },
+  zone: {
+    label: 'World clock',
+    interval: 60,
+    min: 60,
+    fields: [
+      { id: 'time12', label: '12-hour time' },
+      { id: 'time24', label: '24-hour time' },
+      { id: 'date', label: 'Date' },
     ],
   },
   system: {
@@ -181,6 +209,110 @@ export const SOURCE_KINDS = {
     min: 2,
     fields: [{ id: 'text', label: 'Text' }],
   },
+  weather: {
+    label: 'Weather',
+    interval: 20 * 60,
+    min: 10 * 60,
+    fields: [
+      { id: 'temp', label: 'Temperature' },
+      { id: 'feels', label: 'Feels like' },
+      { id: 'condition', label: 'Condition' },
+      { id: 'high', label: 'High' },
+      { id: 'low', label: 'Low' },
+      { id: 'rain', label: 'Chance of rain' },
+      { id: 'sunrise', label: 'Sunrise' },
+      { id: 'sunset', label: 'Sunset' },
+      { id: 'moon', label: 'Moon' },
+    ],
+  },
+  calendar: {
+    label: 'Calendar',
+    interval: 5 * 60,
+    min: 2 * 60,
+    fields: [
+      { id: 'next', label: 'Next event' },
+      { id: 'when', label: 'When' },
+      { id: 'remaining', label: 'Remaining' },
+      { id: 'today', label: 'Today' },
+    ],
+  },
+  http: {
+    label: 'JSON',
+    interval: 60,
+    min: 10,
+    fields: [
+      { id: 'value', label: 'Value' },
+      { id: 'status', label: 'Status' },
+      { id: 'change', label: 'Change' },
+    ],
+  },
+  rss: {
+    label: 'RSS',
+    interval: 15 * 60,
+    min: 5 * 60,
+    fields: [
+      { id: 'feed', label: 'Feed' },
+      { id: 'headline', label: 'Headline' },
+      { id: 'headlines', label: 'Headlines' },
+    ],
+  },
+  mail: {
+    label: 'Mail',
+    interval: 5 * 60,
+    min: 60,
+    fields: [
+      { id: 'count', label: 'Unread' },
+      { id: 'subject', label: 'Subject' },
+    ],
+  },
+  command: {
+    label: 'Command',
+    interval: 5,
+    min: 2,
+    fields: [{ id: 'text', label: 'Text' }],
+  },
+  focus: {
+    label: 'Focus',
+    interval: 1,
+    min: 1,
+    fields: [{ id: 'remaining', label: 'Remaining' }],
+  },
+}
+
+export function sourceFields(source) {
+  if (source?.kind === 'http' && source.config?.preset === 'sports') {
+    return [
+      { id: 'value', label: 'Score' },
+      { id: 'status', label: 'Status' },
+    ]
+  }
+  if (source?.kind === 'http' && source.config?.preset === 'price') {
+    return [
+      { id: 'value', label: 'Price' },
+      { id: 'change', label: 'Change' },
+    ]
+  }
+  if (source?.kind === 'http' && source.config?.preset === 'live') {
+    return [
+      { id: 'value', label: 'Title' },
+      { id: 'status', label: 'Status' },
+    ]
+  }
+  if (source?.kind === 'http' && source.config?.preset === 'ha') {
+    return [
+      { id: 'state', label: 'State' },
+      { id: 'name', label: 'Name' },
+    ]
+  }
+  if (source?.kind === 'http' && source.config?.preset === 'github') {
+    return [
+      { id: 'summary', label: 'Summary' },
+      { id: 'status', label: 'Status' },
+      { id: 'reviews', label: 'Reviews' },
+    ]
+  }
+  if (source?.kind === 'http') return [{ id: 'value', label: 'Value' }]
+  return SOURCE_KINDS[source?.kind]?.fields || []
 }
 
 function defaultSourceConfig(kind) {
@@ -189,7 +321,14 @@ function defaultSourceConfig(kind) {
     const target = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`
     return { target, label: 'Countdown' }
   }
+  if (kind === 'zone') return { zone: 'Europe/London' }
   if (kind === 'file') return { path: '', mode: 'line', field: '' }
+  if (kind === 'weather') return { place: '' }
+  if (kind === 'calendar' || kind === 'rss') return { url: '' }
+  if (kind === 'http') return { url: '', field: '', preset: '', status: '', change: '', base: '', entity: '', repo: '' }
+  if (kind === 'mail') return { host: '' }
+  if (kind === 'command') return { path: '', confirmed: false }
+  if (kind === 'focus') return { minutes: 25, running: false, end: '' }
   return {}
 }
 
@@ -199,14 +338,14 @@ export function clampInterval(kind, seconds) {
   return Math.max(min, n)
 }
 
-export function newSource(kind, config = {}) {
+export function newSource(kind, config = {}, extra = {}) {
   const spec = SOURCE_KINDS[kind]
   if (!spec) throw new Error('That source is not available.')
   return {
     id: uid('s'),
-    name: spec.label,
+    name: extra.name || spec.label,
     kind,
-    intervalSec: spec.interval,
+    intervalSec: extra.intervalSec != null ? clampInterval(kind, extra.intervalSec) : spec.interval,
     config: { ...defaultSourceConfig(kind), ...config },
   }
 }
@@ -406,7 +545,7 @@ export function textClip(preset, start, duration) {
     start,
     duration,
     text: preset.text,
-    font: 'Segoe UI',
+    font: 'roboto-regular',
     weight: preset.weight,
     size: preset.size,
     color: '#ffffff',
@@ -439,7 +578,7 @@ export function widgetClip(kind, start, duration) {
       start,
       duration,
       format: '12h',
-      font: 'Segoe UI',
+      font: 'roboto-regular',
       weight: 300,
       size: 230,
       color: '#ffffff',
@@ -456,7 +595,7 @@ export function widgetClip(kind, start, duration) {
     start,
     duration,
     format: 'short',
-    font: 'Segoe UI',
+    font: 'roboto-regular',
     weight: 400,
     size: 34,
     color: '#ffffff',

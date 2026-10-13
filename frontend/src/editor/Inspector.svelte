@@ -1,6 +1,6 @@
 <script>
   import SourceRange from './SourceRange.svelte'
-  import { CLOCK_FIELDS, DATE_FORMATS, FILTER_LIBRARY, FONTS, SOURCE_KINDS, SWATCHES, TIME_FORMATS, WEIGHTS, effectControls, effectDefaults, effectMeta, effectSettings, filterCSS, fmtBytes, isTextual } from '../lib/project.js'
+  import { CLOCK_FIELDS, DATE_FORMATS, FILTER_LIBRARY, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, coolerFont, effectControls, effectDefaults, effectMeta, effectSettings, filterCSS, fmtBytes, isTextual, sourceFields } from '../lib/project.js'
 
   let { studio, sources, assets, revision, onError } = $props()
 
@@ -227,7 +227,7 @@
                     <button onclick={() => insertField(`clock.${field.id}`)}>{field.label}</button>
                   {/each}
                   {#each studio.project.sources || [] as source (source.id)}
-                    {#each SOURCE_KINDS[source.kind]?.fields || [] as field (field.id)}
+                    {#each sourceFields(source) as field (field.id)}
                       <button onclick={() => insertField(`${source.id}.${field.id}`)}>{source.name} · {field.label}</button>
                     {/each}
                   {/each}
@@ -240,14 +240,14 @@
                 <option value={f.id}>{f.label}</option>
               {/each}
             </select>
-            <p class="ins-note">The cooler updates while this app is open and Keep live is on.</p>
+            <p class="ins-note">This updates on the cooler while the app is open. Save again so the picture is not also printing the old text.</p>
           {/if}
           <div class="ins-row">
             <span>Font</span>
             <div class="ins-pair">
-              <select class="ins-select" value={clip.font} onchange={(e) => set('font', e.currentTarget.value)} aria-label="Font">
-                {#each FONTS as f (f)}
-                  <option value={f}>{f}</option>
+              <select class="ins-select" value={coolerFont(clip)} onchange={(e) => set('font', e.currentTarget.value)} aria-label="Font">
+                {#each FONTS as f (f.id)}
+                  <option value={f.id}>{f.label}</option>
                 {/each}
               </select>
               <select class="ins-select" value={clip.weight} onchange={(e) => set('weight', Number(e.currentTarget.value))} aria-label="Weight">

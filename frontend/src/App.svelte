@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { ActiveName, AppendFrames, Apply, BeginExport, CancelExport, Connect, Duplicate, GetAssets, GetLibrary, GetProject, Job, RefreshClip, RefreshStill, Remove, RestartCooler, SampleSources } from '../wailsjs/go/main/App.js'
+  import { ActiveName, AppendFrames, Apply, BeginExport, CancelExport, Connect, Duplicate, GetAssets, GetLibrary, GetProject, Job, RefreshClip, RefreshStill, Remove, RestartCooler, SampleSources, SetLabels, UpdateLabelText } from '../wailsjs/go/main/App.js'
   import { EventsOn, Quit, WindowMinimise, WindowToggleMaximise } from '../wailsjs/runtime/runtime.js'
   import Brand from './Brand.svelte'
   import DeviceChip from './DeviceChip.svelte'
@@ -8,7 +8,7 @@
   import { applyTheme, saveTheme, storedTheme } from './lib/theme.js'
   import { Sources } from './lib/sources.js'
   import { DEFAULT_LIMITS } from './lib/project.js'
-  import { runLiveTick, session } from './lib/session.svelte.js'
+  import { runLiveTick, session, syncLabels } from './lib/session.svelte.js'
 
   let status = $state({
     connected: false,
@@ -123,6 +123,29 @@
     const stopWatch = watchJob()
     try {
       await Apply(id)
+      await refreshLibrary()
+      await refreshActive()
+      const item = library.find((entry) => entry.id === id)
+      if (item?.remoteName && item.remoteName === activeName && item.editable && !item.draft) {
+        try {
+          const project = JSON.parse(await GetProject(id))
+          if (project?.live && !session.attached) session.park(project, id, session.projectId === id ? session.media : null)
+          await syncLabels(
+            {
+              connected: status.connected,
+              activeName,
+              item,
+              setLabels: (groups) => SetLabels(groups),
+              updateLabels: (items) => UpdateLabelText(items),
+            },
+            project,
+            new Date(),
+            true,
+          )
+        } catch {
+          /* the picture is already showing */
+        }
+      }
     } catch (err) {
       error = message(err)
       applyProgress({ active: false })
@@ -227,6 +250,8 @@
       sample: (queries) => SampleSources(queries),
       refresh: (req) => RefreshStill(req),
       refreshClip: (req) => RefreshClip(req),
+      setLabels: (groups) => SetLabels(groups),
+      updateLabels: (items) => UpdateLabelText(items),
       reload: async () => {
         await refreshLibrary()
         await refreshActive()
@@ -478,7 +503,7 @@
     <div class="wins nodrag">
       <button class="winbtn" aria-label="Minimise" onclick={() => windowAction(WindowMinimise)}>−</button>
       <button class="winbtn" aria-label="Maximise" onclick={() => windowAction(WindowToggleMaximise)}>□</button>
-      <button class="winbtn close" aria-label="Close" onclick={() => windowAction(Quit)}>×</button>
+      <button class="winbtn close" aria-label="Close to the tray" title="Close to the tray" onclick={() => windowAction(Quit)}>×</button>
     </div>
   </header>
 

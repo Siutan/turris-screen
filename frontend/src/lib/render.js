@@ -9,12 +9,24 @@ function measurer() {
   return measureCtx
 }
 
+const PREVIEW_FONTS = {
+  'roboto-regular': ['Roboto', 400],
+  'roboto-thin': ['Roboto', 100],
+  'BitcountSingle-Regular': ['Bitcount Single', 400],
+  'Orbitron-Regular': ['Orbitron', 400],
+  'RubikGlitch-Regular': ['Rubik Glitch', 400],
+}
+
 export function fontString(weight, size, family) {
-  return `${weight} ${Math.max(1, size)}px "${family}", "Segoe UI", sans-serif`
+  const mapped = PREVIEW_FONTS[family]
+  const name = mapped ? mapped[0] : family
+  const faceWeight = mapped ? mapped[1] : weight
+  return `${faceWeight} ${Math.max(1, size)}px "${name}", "Segoe UI", sans-serif`
 }
 
 // drawFrame paints the project at time t onto a 1280×720 context.
-export function drawFrame(ctx, project, sources, t, now = new Date(), values = null) {
+// skip drops clips that the cooler draws itself, so a clock is not baked into the loop.
+export function drawFrame(ctx, project, sources, t, now = new Date(), values = null, skip = null) {
   const env = { sources: project.sources || [], values: values || {} }
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -24,6 +36,7 @@ export function drawFrame(ctx, project, sources, t, now = new Date(), values = n
   ctx.fillRect(0, 0, W, H)
   syncEffects(project)
   for (const { clip } of activeClips(project, t)) {
+    if (skip?.(clip)) continue
     if (clip.type === 'media') drawMedia(ctx, clip, sources, t)
     else if (isTextual(clip)) drawText(ctx, clip, now, env)
     else if (clip.type === 'effect') paintEffect(ctx, clip, t)

@@ -16,6 +16,26 @@ test('last good values survive an error flag', () => {
   assert.equal(resolveText('CPU {{sys.cpu}}', sources, values, new Date()), 'CPU 42')
 })
 
+test('a world clock uses the zone on the source', () => {
+  const sources = [{ id: 'lon', name: 'London', kind: 'zone', config: { zone: 'Europe/London' } }]
+  const now = new Date(Date.UTC(2026, 9, 9, 10, 41))
+  assert.equal(resolveText('{{lon.time24}}', sources, {}, now), '11:41')
+})
+
+test('calendar remaining ticks from the cached start', () => {
+  const sources = [{ id: 'cal', name: 'Calendar', kind: 'calendar', config: { url: 'https://example.com/a.ics' } }]
+  const values = { cal: { fields: { next: 'Design review', start: '2026-10-09T22:00:00' } } }
+  const now = new Date(2026, 9, 9, 21, 46)
+  assert.equal(resolveText('{{cal.remaining}} {{cal.next}}', sources, values, now), '14 min Design review')
+})
+
+test('a running focus timer counts down in seconds', () => {
+  const end = new Date(2026, 9, 9, 21, 46, 30).toISOString()
+  const sources = [{ id: 'f', name: 'Focus', kind: 'focus', config: { running: true, end } }]
+  const now = new Date(2026, 9, 9, 21, 46, 0)
+  assert.equal(resolveText('{{f.remaining}}', sources, {}, now), '0:30')
+})
+
 test('countdown remaining is computed from the stored target', () => {
   const sources = [{ id: 'c', name: 'Countdown', kind: 'countdown', config: { target: '2026-10-09T22:00', label: 'Show' } }]
   const now = new Date(2026, 9, 9, 21, 46)

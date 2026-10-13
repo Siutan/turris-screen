@@ -58,6 +58,10 @@ export function GetProject(arg1) {
   return window['go']['main']['App']['GetProject'](arg1);
 }
 
+export function GetSourceSecret(arg1) {
+  return window['go']['main']['App']['GetSourceSecret'](arg1);
+}
+
 export function GetYouTubeTool() {
   return window['go']['main']['App']['GetYouTubeTool']();
 }
@@ -84,6 +88,10 @@ export function Job() {
 
 export function PickSourceFile() {
   return window['go']['main']['App']['PickSourceFile']();
+}
+
+export function PickSourceProgram() {
+  return window['go']['main']['App']['PickSourceProgram']();
 }
 
 export function RefreshClip(arg1) {
@@ -116,4 +124,16 @@ export function SaveDraft(arg1) {
 
 export function SearchKlipy(arg1) {
   return window['go']['main']['App']['SearchKlipy'](arg1);
+}
+
+export function SetLabels(arg1) {
+  return window['go']['main']['App']['SetLabels'](arg1);
+}
+
+export function SetSourceSecret(arg1, arg2) {
+  return window['go']['main']['App']['SetSourceSecret'](arg1, arg2);
+}
+
+export function UpdateLabelText(arg1) {
+  return window['go']['main']['App']['UpdateLabelText'](arg1);
 }

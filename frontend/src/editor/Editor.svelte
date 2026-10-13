@@ -26,6 +26,8 @@
   import { Sources } from '../lib/sources.js'
   import { Studio } from '../lib/studio.svelte.js'
   import { renderFrames, thumbnail } from '../lib/exporter.js'
+  import { labelGroups } from '../lib/labels.js'
+  import { textLayout } from '../lib/render.js'
   import { session } from '../lib/session.svelte.js'
   import { decodeClips, encodeClips } from '../lib/menus.js'
 
@@ -318,12 +320,15 @@
         signal: abort.signal,
         now,
         values,
+        omitLabels: true,
         onProgress: (p) => (saving = { phase: 'render', label: 'Rendering frames', percent: p * 100 }),
       })
       saving = { phase: 'encode', label: 'Encoding', percent: 0 }
-      const result = await FinishExport({ exportId, motion, show: status.connected, save: payload(thumb) })
+      const labels = labelGroups(studio.project, now, values, (clip, at, src, vals) => textLayout(clip, at, undefined, { sources: src, values: vals }))
+      const result = await FinishExport({ exportId, motion, show: status.connected, save: payload(thumb), labels })
       studio.projectId = result.item.id
       studio.dirty = false
+      if (result.shown) session.forgetLabels()
       onSaved?.(result.item)
       if (result.shown) notify('Saved to your library and showing on the cooler.')
       else if (result.showError) notify(`Saved to your library, but the cooler did not take it: ${result.showError}`, 'error')

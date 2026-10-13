@@ -42,12 +42,47 @@ function countdownFields(source, now) {
   }
 }
 
+function zoneFields(source, now) {
+  const zone = String(source.config?.zone || '').trim()
+  if (!zone) return null
+  try {
+    const time24 = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now)
+    const time12 = new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit', hour12: true }).format(now)
+    const date = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', month: 'short', day: '2-digit' }).format(now)
+    return { time12, time24, date }
+  } catch {
+    return null
+  }
+}
+
+export function formatFocus(end, now) {
+  const target = new Date(end)
+  if (!end || Number.isNaN(target.getTime())) return ''
+  let sec = Math.round((target - now) / 1000)
+  if (sec < 0) sec = 0
+  return `${Math.floor(sec / 60)}:${pad(sec % 60)}`
+}
+
+function focusFields(source, now) {
+  if (!source.config?.running) return { remaining: '' }
+  return { remaining: formatFocus(source.config?.end, now) }
+}
+
+function localFields(source, sampled, now) {
+  if (source.kind === 'countdown') return countdownFields(source, now)
+  if (source.kind === 'zone') return zoneFields(source, now)
+  if (source.kind === 'focus') return focusFields(source, now)
+  if (source.kind === 'calendar') return { remaining: formatRemaining(sampled?.start, now) }
+  return null
+}
+
 export function resolveText(text, sources = [], values = {}, now = new Date()) {
   const index = new Map()
   index.set('clock', clockFields(now))
   for (const source of sources || []) {
     const sampled = values?.[source.id]?.fields || {}
-    const fields = source.kind === 'countdown' ? { ...sampled, ...countdownFields(source, now) } : { ...sampled }
+    const extra = localFields(source, sampled, now)
+    const fields = extra ? { ...sampled, ...extra } : { ...sampled }
     index.set(source.id, fields)
     if (source.name && !index.has(source.name)) index.set(source.name, fields)
   }

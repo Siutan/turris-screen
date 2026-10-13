@@ -13,6 +13,7 @@ import (
 var assets embed.FS
 
 func main() {
+	prepareTrayRuntime()
 	// Create an instance of the app structure
 	app := NewApp()
 
@@ -37,8 +38,9 @@ func main() {
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 		},
-		OnStartup:  app.startup,
-		OnShutdown: app.shutdown,
+		OnStartup:     app.startup,
+		OnShutdown:    app.shutdown,
+		OnBeforeClose: app.beforeClose,
 		Bind: []interface{}{
 			app,
 		},

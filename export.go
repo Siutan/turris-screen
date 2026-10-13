@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"turris-screen/turris"
 )
 
 // ExportLimits tells the editor what the cooler can take.
@@ -23,10 +25,11 @@ type ExportLimits struct {
 // ExportRequest finishes an export. Motion is false when nothing on the timeline moves,
 // which lets the encoder use a much lower bitrate.
 type ExportRequest struct {
-	ExportID string      `json:"exportId"`
-	Motion   bool        `json:"motion"`
-	Show     bool        `json:"show"`
-	Save     ProjectSave `json:"save"`
+	ExportID string                `json:"exportId"`
+	Motion   bool                  `json:"motion"`
+	Show     bool                  `json:"show"`
+	Save     ProjectSave           `json:"save"`
+	Labels   []turris.OverlayGroup `json:"labels"`
 }
 
 // ExportResult is the saved item. ShowError is set when it was saved but not shown.

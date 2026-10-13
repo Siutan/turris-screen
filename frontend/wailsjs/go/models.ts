@@ -38,6 +38,20 @@ export namespace main {
 	        this.detail = source["detail"];
 	    }
 	}
+	export class ClipRequest {
+	    projectId: string;
+	    exportId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projectId = source["projectId"];
+	        this.exportId = source["exportId"];
+	    }
+	}
 	export class ExportLimits {
 	    maxSeconds: number;
 	    maxBytes: number;
@@ -87,6 +101,7 @@ export namespace main {
 	    motion: boolean;
 	    show: boolean;
 	    save: ProjectSave;
+	    labels: turris.OverlayGroup[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ExportRequest(source);
@@ -98,6 +113,7 @@ export namespace main {
 	        this.motion = source["motion"];
 	        this.show = source["show"];
 	        this.save = this.convertValues(source["save"], ProjectSave);
+	        this.labels = this.convertValues(source["labels"], turris.OverlayGroup);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -336,18 +352,22 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
-	export class ClipRequest {
-	    projectId: string;
-	    exportId: string;
+	export class SourceSecret {
+	    headers?: Record<string, string>;
+	    token?: string;
+	    user?: string;
+	    pass?: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new ClipRequest(source);
+	        return new SourceSecret(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.projectId = source["projectId"];
-	        this.exportId = source["exportId"];
+	        this.headers = source["headers"];
+	        this.token = source["token"];
+	        this.user = source["user"];
+	        this.pass = source["pass"];
 	    }
 	}
 	export class StillRequest {
@@ -394,6 +414,92 @@ export namespace main {
 	        this.installed = source["installed"];
 	        this.managed = source["managed"];
 	        this.path = source["path"];
+	    }
+	}
+
+}
+
+export namespace turris {
+	
+	export class OverlayLabel {
+	    id: number;
+	    line: number;
+	    text: string;
+	    size: number;
+	    color: number;
+	    font: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OverlayLabel(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	        this.size = source["size"];
+	        this.color = source["color"];
+	        this.font = source["font"];
+	    }
+	}
+	export class OverlayGroup {
+	    id: number;
+	    x: number;
+	    y: number;
+	    w: number;
+	    h: number;
+	    align: number;
+	    labels: OverlayLabel[];
+	
+	    static createFrom(source: any = {}) {
+	        return new OverlayGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.w = source["w"];
+	        this.h = source["h"];
+	        this.align = source["align"];
+	        this.labels = this.convertValues(source["labels"], OverlayLabel);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class OverlayText {
+	    groupId: number;
+	    labelId: number;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OverlayText(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.groupId = source["groupId"];
+	        this.labelId = source["labelId"];
+	        this.text = source["text"];
 	    }
 	}
 

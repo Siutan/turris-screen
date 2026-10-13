@@ -33,7 +33,26 @@ func platformReaders(a *App) Readers {
 		Temps:    readTemps,
 		Media:    readNowPlaying,
 		ReadFile: readSourceFile,
+		Fetch:    fetchHTTPS,
+		Secret:   a.secretFor,
+		Run:      runProgram,
+		Mail:     imapInbox,
 	}
+}
+
+func runProgram(path string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("the program timed out")
+		}
+		return "", fmt.Errorf("the program did not finish")
+	}
+	return firstLine(out), nil
 }
 
 func (a *App) readSystem() (map[string]string, error) {

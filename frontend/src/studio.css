@@ -498,6 +498,24 @@
   font-size: 12px;
 }
 
+.src-action {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: var(--chip);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.src-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
 .switch:disabled { opacity: 0.45; }
 
 .field-menu { position: absolute; z-index: 5; min-width: 180px; max-height: 240px; overflow: auto; }

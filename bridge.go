@@ -108,6 +108,57 @@ func (b *Bridge) ShowMedia(remoteName string) error {
 		return err
 	}
 	bridgeLog("show %s", remoteName)
+	if err := dev.LabelError(); err != nil {
+		bridgeLog("labels failed: %v", err)
+	} else if groups := dev.Labels(); len(groups) > 0 {
+		lines := 0
+		sample := ""
+		for _, group := range groups {
+			lines += len(group.Labels)
+			if sample == "" && len(group.Labels) > 0 {
+				sample = group.Labels[0].Text
+			}
+		}
+		bridgeLog("labels %d groups, %d lines, %q", len(groups), lines, sample)
+	}
+	return nil
+}
+
+// StageLabels keeps the clock and field text for the next show. Play sends it after
+// the commit, because that commit clears the text layer.
+func (b *Bridge) StageLabels(groups []turris.OverlayGroup) error {
+	dev, err := b.device()
+	if err != nil {
+		return err
+	}
+	dev.StageLabels(groups)
+	return nil
+}
+
+// SetLabels replaces the text layer on the clip that is already playing.
+func (b *Bridge) SetLabels(groups []turris.OverlayGroup) error {
+	dev, err := b.device()
+	if err != nil {
+		return err
+	}
+	if err := dev.SetLabels(groups); err != nil {
+		bridgeLog("labels failed: %v", err)
+		return err
+	}
+	bridgeLog("labels %d groups", len(groups))
+	return nil
+}
+
+// UpdateLabelText pushes new strings for labels already on screen.
+func (b *Bridge) UpdateLabelText(items []turris.OverlayText) error {
+	dev, err := b.device()
+	if err != nil {
+		return err
+	}
+	if err := dev.UpdateLabelText(items); err != nil {
+		bridgeLog("label text failed: %v", err)
+		return err
+	}
 	return nil
 }
 

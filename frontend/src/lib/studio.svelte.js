@@ -265,8 +265,8 @@ export class Studio {
     })
   }
 
-  addSource(kind, config) {
-    const source = newSource(kind, config)
+  addSource(kind, config, extra) {
+    const source = newSource(kind, config, extra)
     this.edit((p) => {
       if (!Array.isArray(p.sources)) p.sources = []
       p.sources.push(source)

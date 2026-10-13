@@ -48,6 +48,9 @@ type Device struct {
 	lastPing    time.Time
 	reopen      func() (link, string, error)
 	recoverMu   sync.Mutex
+	labels      []OverlayGroup
+	labelsReady bool
+	labelErr    error
 }
 
 func newDevice(io link) *Device {
@@ -146,8 +149,12 @@ func (d *Device) Handshake() error {
 		}
 	}
 	// Apply commits the session. The panel often stays quiet here; a missing reply is still a success.
+	// An empty apply also clears the text layer, so a clip that already has labels is sent again.
 	if _, err := d.exchange(BuildApply(d.nextTrack()), 400*time.Millisecond, false); err != nil {
 		return fmt.Errorf("the cooler did not accept the session: %w", err)
+	}
+	if err := d.pushLabelsLocked(); err != nil {
+		return err
 	}
 	d.alive = true
 	d.lastPing = time.Now()
@@ -285,13 +292,115 @@ func (d *Device) Play(name string) error {
 		d.mu.Unlock()
 		return err
 	}
+	ready := d.labelsReady
+	labels := d.labels
+	d.labelsReady = false
+	if !ready {
+		d.labels = nil
+		labels = nil
+	}
 	_, err := d.exchange(BuildApply(d.nextTrack()), 1500*time.Millisecond, false)
 	d.mu.Unlock()
 	// Apply often drops the USB handle as the panel starts the clip.
 	if err != nil && !errors.Is(err, errTimeout) {
 		return err
 	}
-	return d.ensureAlive()
+	if err := d.ensureAlive(); err != nil {
+		return err
+	}
+	if !ready || len(labels) == 0 {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.labels = labels
+	d.labelErr = nil
+	_, err = d.exchange(BuildLabelConfig(labels, d.nextTrack()), 500*time.Millisecond, false)
+	if err != nil && !errors.Is(err, errTimeout) {
+		d.labelErr = err
+	}
+	return nil
+}
+
+// StageLabels keeps the text layer for the next Play. The empty apply that commits
+// a clip clears that layer, so Play sends it again once the panel is back.
+func (d *Device) StageLabels(groups []OverlayGroup) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.labels = cloneGroups(groups)
+	d.labelsReady = true
+	d.labelErr = nil
+}
+
+// Labels is the text layer last sent, or the one waiting for the next show.
+func (d *Device) Labels() []OverlayGroup {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return cloneGroups(d.labels)
+}
+
+// LabelError is set when the text layer could not be written after a show.
+func (d *Device) LabelError() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.labelErr
+}
+
+// SetLabels replaces the text layer. The clip keeps playing. An empty list clears it.
+func (d *Device) SetLabels(groups []OverlayGroup) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.labels = cloneGroups(groups)
+	d.labelErr = nil
+	_, err := d.exchange(BuildLabelConfig(d.labels, d.nextTrack()), 500*time.Millisecond, false)
+	if err != nil && !errors.Is(err, errTimeout) {
+		d.labelErr = err
+	}
+	return err
+}
+
+func (d *Device) pushLabelsLocked() error {
+	if len(d.labels) == 0 || d.io == nil {
+		return nil
+	}
+	_, err := d.exchange(BuildLabelConfig(d.labels, d.nextTrack()), 500*time.Millisecond, false)
+	if err != nil && !errors.Is(err, errTimeout) {
+		d.labelErr = err
+		return err
+	}
+	return nil
+}
+
+func cloneGroups(groups []OverlayGroup) []OverlayGroup {
+	out := make([]OverlayGroup, len(groups))
+	for i, group := range groups {
+		out[i] = group
+		out[i].Labels = append([]OverlayLabel(nil), group.Labels...)
+	}
+	return out
+}
+
+// UpdateLabelText replaces the strings on labels that are already on screen.
+func (d *Device) UpdateLabelText(items []OverlayText) error {
+	if len(items) == 0 {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, item := range items {
+		for gi := range d.labels {
+			if d.labels[gi].ID != item.GroupID {
+				continue
+			}
+			for li := range d.labels[gi].Labels {
+				if d.labels[gi].Labels[li].ID == item.LabelID {
+					d.labels[gi].Labels[li].Text = item.Text
+				}
+			}
+		}
+	}
+	_, err := d.exchange(BuildLabelText(items, d.nextTrack()), 400*time.Millisecond, false)
+	return err
 }
 
 // Brightness changes the backlight without touching the current clip.
@@ -308,6 +417,9 @@ func (d *Device) Brightness(value int) error {
 		return err
 	}
 	if _, err := d.exchange(BuildApply(d.nextTrack()), 1500*time.Millisecond, false); err != nil {
+		return err
+	}
+	if err := d.pushLabelsLocked(); err != nil {
 		return err
 	}
 	d.brightness = value

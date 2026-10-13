@@ -35,6 +35,40 @@ func TestUserConfigBootClips(t *testing.T) {
 	}
 }
 
+func TestLabelConfigCarriesText(t *testing.T) {
+	frame := BuildLabelConfig([]OverlayGroup{{
+		ID: 110, X: 30, Y: 300, W: 1220, H: 120, Align: 2,
+		Labels: []OverlayLabel{{
+			ID: 132, Line: 0, Text: "12:31", Size: 120, Color: 14474460, Font: "BitcountSingle-Regular",
+		}},
+	}}, 0)
+	body := frame[8:]
+	fields, err := Parse(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields[OpApply]; !ok {
+		t.Fatal("label layout must use the run-config opcode")
+	}
+	if !bytes.Contains(body, []byte("12:31")) || !bytes.Contains(body, []byte("BitcountSingle-Regular")) {
+		t.Fatal("label text or font missing")
+	}
+	if !bytes.Contains(body, []byte{0x38, 0x13}) {
+		t.Fatal("line gap missing")
+	}
+	update := BuildLabelText([]OverlayText{{GroupID: 110, LabelID: 132, Text: "12:32"}}, 0)
+	updated, err := Parse(update[8:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := updated[OpLabels]; !ok {
+		t.Fatal("text update must use the label opcode")
+	}
+	if !bytes.Contains(update, []byte("12:32")) {
+		t.Fatal("updated text missing")
+	}
+}
+
 func TestPingFrame(t *testing.T) {
 	got := BuildPing(0)
 	payload := append([]byte{0x0a, 0x06}, []byte("hello?")...)
