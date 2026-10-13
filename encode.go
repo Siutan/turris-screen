@@ -7,9 +7,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"turris-screen/turris"
 )
@@ -31,6 +31,16 @@ const (
 const x264Params = "aud=1:repeat-headers=1:annexb=1:keyint=60:min-keyint=6:scenecut=40:bframes=0:weightp=0:8x8dct=0:cabac=1:ref=3"
 
 func findFFmpeg() (string, error) {
+	// The packaged app carries ffmpeg and ffprobe. A dev build that has not
+	// downloaded them yet still falls back to KANALI or PATH.
+	if _, err := bundledFFprobe(); err != nil {
+		return "", err
+	}
+	if path, err := bundledFFmpeg(); err != nil {
+		return "", err
+	} else if path != "" {
+		return path, nil
+	}
 	candidates := []string{
 		`C:\Program Files\KANALI\resources\Connect\ffmpeg\ffmpeg.exe`,
 	}
@@ -43,6 +53,16 @@ func findFFmpeg() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("ffmpeg was not found. Install ffmpeg and add it to PATH")
+}
+
+// ffmpegLocation is the directory of the chosen ffmpeg when we know it.
+// yt-dlp looks there for ffprobe as well as ffmpeg.
+func ffmpegLocation(path string) string {
+	dir := filepath.Dir(path)
+	if dir == "" || dir == "." {
+		return path
+	}
+	return dir
 }
 
 // encodeStill writes the media blob the cooler plays: a Tryx header plus 60 fps H.264.
@@ -68,7 +88,7 @@ func encodeAnnexB(ffmpegPath, pngPath string) ([]byte, error) {
 		"-x264-params", x264Params,
 		"-f", "h264", "pipe:1",
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -149,7 +169,7 @@ func encodeFrames(ffmpegPath, framesPath string, srcFPS, kbps, want int, onProgr
 		"-progress", "pipe:1", "-nostats",
 		"-f", "h264", outPath,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
@@ -187,7 +207,7 @@ func transcodeVideo(ffmpegPath, src, dst string) error {
 		"-movflags", "+faststart",
 		dst,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

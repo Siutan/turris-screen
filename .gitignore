@@ -4,3 +4,4 @@ frontend/dist
 .worktrees
 .worktrees/
 .env
+bundle/

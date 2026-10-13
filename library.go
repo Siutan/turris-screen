@@ -127,7 +127,14 @@ func (l *Library) Renew(id string) (item MediaItem, path, previous string, err e
 			continue
 		}
 		previous = stored.RemoteName
-		next := remoteName(time.Now())
+		now := time.Now()
+		next := remoteName(now)
+		// The cooler name is only unique to the millisecond. A renew that lands
+		// in the same one would rename the clip onto itself.
+		for next == previous {
+			now = now.Add(time.Millisecond)
+			next = remoteName(now)
+		}
 		path = filepath.Join(l.dir, next)
 		clip := ""
 		if previous != "" {

@@ -144,11 +144,6 @@ func openOnce(retried bool) (link, string, error) {
 	return nil, "", errors.New("The cooler is not plugged in.")
 }
 
-type candidate struct {
-	path string
-	hint string
-}
-
 func findDevices() ([]candidate, error) {
 	list, err := windows.SetupDiGetClassDevsEx(nil, "USB", 0, windows.DIGCF_PRESENT|windows.DIGCF_ALLCLASSES, 0, "")
 	if err != nil {

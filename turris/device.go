@@ -24,6 +24,12 @@ type link interface {
 	Close() error
 }
 
+// candidate is one plugged-in cooler port.
+type candidate struct {
+	path string
+	hint string
+}
+
 // Device is a claimed Turris. Playback keeps looping only while this stays open and pinging.
 type Device struct {
 	mu          sync.Mutex

@@ -1,0 +1,16 @@
+These programs are packed inside Turris Studio and unpacked on first launch.
+They run as separate programs.
+
+ffmpeg and ffprobe
+  GPLv3 essentials build 9.0.2 by Gyan
+  https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2
+  Source: https://github.com/FFmpeg/FFmpeg/commit/946fcce07b
+  License: https://www.gnu.org/licenses/gpl-3.0.html
+
+yt-dlp
+  Standalone executable 2026.08.19, Unlicense
+  https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19
+
+qjs
+  QuickJS-ng v0.17.0, MIT License
+  https://github.com/quickjs-ng/quickjs/releases/tag/v0.17.0

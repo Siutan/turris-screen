@@ -17,8 +17,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	"turris-screen/internal/tools"
 )
 
 const (
@@ -80,14 +81,17 @@ func parseYouTubeURL(raw string) (string, error) {
 }
 
 func managedYtdlp() string {
-	root, err := os.UserConfigDir()
+	dir, err := tools.BinDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(root, "turris-screen", "bin", "yt-dlp.exe")
+	return filepath.Join(dir, "yt-dlp.exe")
 }
 
 func findYtdlp() YouTubeTool {
+	if p, err := bundledYtdlp(); err == nil && p != "" {
+		return YouTubeTool{Installed: true, Managed: true, Path: p}
+	}
 	if p := managedYtdlp(); p != "" {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return YouTubeTool{Installed: true, Managed: true, Path: p}
@@ -191,10 +195,10 @@ func refreshYtdlp(ctx context.Context, path string) {
 // ffmpeg, so cancelling has to end the whole tree or the pipes never close.
 func ytdlpCommand(ctx context.Context, path string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	cmd.Cancel = func() error {
 		kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
-		kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		hideWindow(kill)
 		if err := kill.Run(); err != nil {
 			return cmd.Process.Kill()
 		}
@@ -208,8 +212,12 @@ func ytdlpCommand(ctx context.Context, path string, args ...string) *exec.Cmd {
 // cannot change formats or file names under us.
 func ytdlpBaseArgs() []string {
 	args := []string{"--ignore-config", "--no-playlist", "--no-warnings"}
-	// YouTube needs a JavaScript runtime for most formats. yt-dlp finds Deno itself;
-	// Node has to be named.
+	// YouTube needs a JavaScript runtime for most formats. Deno is on by default.
+	// QuickJS ships with the app, so a machine without Deno or Node still works.
+	// The first colon separates the runtime name; a Windows drive letter is the second.
+	if qjs, err := bundledQJS(); err == nil && qjs != "" {
+		args = append(args, "--js-runtimes", "quickjs:"+qjs)
+	}
 	if _, err := exec.LookPath("deno"); err != nil {
 		if node, err := exec.LookPath("node"); err == nil {
 			args = append(args, "--js-runtimes", "node:"+node)
@@ -280,7 +288,7 @@ func downloadVideo(ctx context.Context, ytdlp, ffmpeg, infoPath, dir string, fro
 		"--load-info-json", infoPath,
 		"--no-part", "--force-overwrites", "--no-mtime", "--newline", "--progress",
 		"--progress-template", "download:[dl] %(progress._percent_str)s",
-		"--ffmpeg-location", ffmpeg,
+		"--ffmpeg-location", ffmpegLocation(ffmpeg),
 		"-f", ytdlpFormat,
 		"-P", dir,
 		"-o", "video.%(ext)s",
