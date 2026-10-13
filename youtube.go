@@ -17,7 +17,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"turris-screen/internal/tools"
@@ -196,10 +195,10 @@ func refreshYtdlp(ctx context.Context, path string) {
 // ffmpeg, so cancelling has to end the whole tree or the pipes never close.
 func ytdlpCommand(ctx context.Context, path string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	cmd.Cancel = func() error {
 		kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
-		kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		hideWindow(kill)
 		if err := kill.Run(); err != nil {
 			return cmd.Process.Kill()
 		}

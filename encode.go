@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"turris-screen/turris"
 )
@@ -89,7 +88,7 @@ func encodeAnnexB(ffmpegPath, pngPath string) ([]byte, error) {
 		"-x264-params", x264Params,
 		"-f", "h264", "pipe:1",
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -170,7 +169,7 @@ func encodeFrames(ffmpegPath, framesPath string, srcFPS, kbps, want int, onProgr
 		"-progress", "pipe:1", "-nostats",
 		"-f", "h264", outPath,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
@@ -208,7 +207,7 @@ func transcodeVideo(ffmpegPath, src, dst string) error {
 		"-movflags", "+faststart",
 		dst,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
