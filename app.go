@@ -56,6 +56,7 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	loadDotEnv()
+	go warmTools()
 	go a.Connect()
 }
 

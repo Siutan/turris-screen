@@ -9,5 +9,8 @@
   "author": {
     "name": "",
     "email": ""
+  },
+  "preBuildHooks": {
+    "*/*": "go run ../../scripts/fetch-tools.go"
   }
 }
