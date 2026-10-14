@@ -37,6 +37,7 @@ func platformReaders(a *App) Readers {
 		Secret:   a.secretFor,
 		Run:      runProgram,
 		Mail:     imapInbox,
+		Locate:   deviceLocation,
 	}
 }
 

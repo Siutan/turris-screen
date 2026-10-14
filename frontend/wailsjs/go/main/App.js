@@ -126,6 +126,10 @@ export function SearchKlipy(arg1) {
   return window['go']['main']['App']['SearchKlipy'](arg1);
 }
 
+export function SearchPlaces(arg1) {
+  return window['go']['main']['App']['SearchPlaces'](arg1);
+}
+
 export function SetLabels(arg1) {
   return window['go']['main']['App']['SetLabels'](arg1);
 }

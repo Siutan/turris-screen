@@ -57,7 +57,7 @@ func TestSecretsStayOutOfTheProjectJSON(t *testing.T) {
 func TestWeatherReadsOpenMeteo(t *testing.T) {
 	readers := Readers{Fetch: func(req FetchRequest) ([]byte, error) {
 		if strings.Contains(req.URL, "geocoding-api") {
-			return []byte(`{"results":[{"latitude":51.5072,"longitude":-0.1276}]}`), nil
+			return []byte(`{"results":[{"name":"Test City Weather","latitude":51.5072,"longitude":-0.1276}]}`), nil
 		}
 		return []byte(`{"current":{"temperature_2m":18.4,"apparent_temperature":17.2,"weather_code":3,"precipitation_probability":40},"daily":{"temperature_2m_max":[21.2],"temperature_2m_min":[12.4],"sunrise":["2026-10-09T07:12"],"sunset":["2026-10-09T18:24"]}}`), nil
 	}}
@@ -74,6 +74,71 @@ func TestWeatherReadsOpenMeteo(t *testing.T) {
 	known := time.Date(2000, 1, 6, 18, 14, 0, 0, time.UTC)
 	if moonPhase(known) != "New moon" {
 		t.Fatal(moonPhase(known))
+	}
+	if fields["place"] != "Test City Weather" {
+		t.Fatalf("place: %+v", fields)
+	}
+}
+
+func TestWeatherUsesTheChosenPoint(t *testing.T) {
+	readers := Readers{Fetch: func(req FetchRequest) ([]byte, error) {
+		if strings.Contains(req.URL, "geocoding-api") {
+			t.Fatal("stored coordinates were geocoded again")
+		}
+		if !strings.Contains(req.URL, "latitude=-37.8140") || !strings.Contains(req.URL, "longitude=144.9633") {
+			t.Fatalf("url %s", req.URL)
+		}
+		return []byte(`{"current":{"temperature_2m":18.4,"apparent_temperature":17.2,"weather_code":3,"precipitation_probability":40},"daily":{"temperature_2m_max":[21.2],"temperature_2m_min":[12.4],"sunrise":["2026-10-09T07:12"],"sunset":["2026-10-09T18:24"]}}`), nil
+	}}
+	fields, err := sampleWeather(SourceQuery{ID: "w", Kind: "weather", Config: map[string]any{
+		"place": "Melbourne, Victoria, Australia",
+		"lat":   "-37.8140",
+		"lon":   "144.9633",
+	}}, readers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fields["temp"] != "18°" || fields["place"] != "Melbourne, Victoria, Australia" {
+		t.Fatalf("%+v", fields)
+	}
+}
+
+func TestWeatherUsesThePCWhenTheCityIsBlank(t *testing.T) {
+	readers := Readers{
+		Locate: func() (string, string, error) { return "-33.8688", "151.2093", nil },
+		Fetch: func(req FetchRequest) ([]byte, error) {
+			if strings.Contains(req.URL, "geocoding-api") {
+				t.Fatal("a blank city was geocoded")
+			}
+			if !strings.Contains(req.URL, "latitude=-33.8688") || !strings.Contains(req.URL, "longitude=151.2093") {
+				t.Fatalf("url %s", req.URL)
+			}
+			return []byte(`{"current":{"temperature_2m":18.4,"apparent_temperature":17.2,"weather_code":0,"precipitation_probability":0},"daily":{"temperature_2m_max":[21],"temperature_2m_min":[12],"sunrise":["2026-10-09T07:12"],"sunset":["2026-10-09T18:24"]}}`), nil
+		},
+	}
+	fields, err := sampleWeather(SourceQuery{ID: "w", Kind: "weather", Config: map[string]any{}}, readers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fields["condition"] != "Clear" || fields["place"] != "" {
+		t.Fatalf("%+v", fields)
+	}
+	_, err = sampleWeather(SourceQuery{ID: "w", Kind: "weather", Config: map[string]any{}}, Readers{})
+	if err == nil || err.Error() != "enter a city" {
+		t.Fatal(err)
+	}
+}
+
+func TestPlaceHitsKeepCitiesApart(t *testing.T) {
+	hits := placeHits([]byte(`{"results":[{"name":"Melbourne","admin1":"Victoria","country":"Australia","latitude":-37.814,"longitude":144.96332},{"name":"Melbourne","admin1":"Florida","country":"United States","latitude":28.0836,"longitude":-80.6081}]}`))
+	if len(hits) != 2 {
+		t.Fatalf("%+v", hits)
+	}
+	if hits[0].Label != "Melbourne, Victoria, Australia" || hits[0].Lat != "-37.8140" || hits[0].Lon != "144.9633" {
+		t.Fatalf("first %+v", hits[0])
+	}
+	if hits[1].Label != "Melbourne, Florida, United States" || hits[1].Lat != "28.0836" || hits[1].Lon != "-80.6081" {
+		t.Fatalf("second %+v", hits[1])
 	}
 }
 

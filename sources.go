@@ -55,6 +55,7 @@ type Readers struct {
 	Secret   func(id string) SourceSecret
 	Run      func(path string) (string, error)
 	Mail     func(host string, secret SourceSecret) (map[string]string, error)
+	Locate   func() (lat, lon string, err error)
 }
 
 func sampleAll(queries []SourceQuery, readers Readers) []SourceSample {

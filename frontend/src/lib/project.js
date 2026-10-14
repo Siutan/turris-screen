@@ -223,6 +223,7 @@ export const SOURCE_KINDS = {
       { id: 'sunrise', label: 'Sunrise' },
       { id: 'sunset', label: 'Sunset' },
       { id: 'moon', label: 'Moon' },
+      { id: 'place', label: 'Place' },
     ],
   },
   calendar: {
@@ -323,7 +324,7 @@ function defaultSourceConfig(kind) {
   }
   if (kind === 'zone') return { zone: 'Europe/London' }
   if (kind === 'file') return { path: '', mode: 'line', field: '' }
-  if (kind === 'weather') return { place: '' }
+  if (kind === 'weather') return { place: '', lat: '', lon: '' }
   if (kind === 'calendar' || kind === 'rss') return { url: '' }
   if (kind === 'http') return { url: '', field: '', preset: '', status: '', change: '', base: '', entity: '', repo: '' }
   if (kind === 'mail') return { host: '' }

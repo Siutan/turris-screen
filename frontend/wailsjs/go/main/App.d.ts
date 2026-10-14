@@ -65,6 +65,8 @@ export function SaveDraft(arg1:main.ProjectSave):Promise<main.MediaItem>;
 
 export function SearchKlipy(arg1:main.KlipyQuery):Promise<main.KlipyPage>;
 
+export function SearchPlaces(arg1:string):Promise<Array<main.PlaceHit>>;
+
 export function SetLabels(arg1:Array<turris.OverlayGroup>):Promise<void>;
 
 export function SetSourceSecret(arg1:string,arg2:main.SourceSecret):Promise<void>;

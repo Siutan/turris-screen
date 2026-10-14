@@ -97,11 +97,7 @@ func configString(config map[string]any, key string) string {
 }
 
 func sampleWeather(query SourceQuery, readers Readers) (map[string]string, error) {
-	place := configString(query.Config, "place")
-	if place == "" {
-		return nil, fmt.Errorf("enter a city")
-	}
-	lat, lon, err := geocode(place, readers, query.ID)
+	lat, lon, label, err := weatherPoint(query, readers)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +106,32 @@ func sampleWeather(query SourceQuery, readers Readers) (map[string]string, error
 	if err != nil {
 		return nil, err
 	}
-	return weatherFields(body, time.Now())
+	fields, err := weatherFields(body, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if label != "" {
+		fields["place"] = label
+	}
+	return fields, nil
+}
+
+func weatherPoint(query SourceQuery, readers Readers) (lat, lon, label string, err error) {
+	lat = configString(query.Config, "lat")
+	lon = configString(query.Config, "lon")
+	label = configString(query.Config, "place")
+	if lat != "" && lon != "" {
+		return lat, lon, label, nil
+	}
+	if label != "" {
+		lat, lon, err = geocode(label, readers, query.ID)
+		return lat, lon, label, err
+	}
+	if readers.Locate == nil {
+		return "", "", "", fmt.Errorf("enter a city")
+	}
+	lat, lon, err = readers.Locate()
+	return lat, lon, "", err
 }
 
 var geoMu sync.Mutex
@@ -129,27 +150,80 @@ func geocode(place string, readers Readers, id string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	lat, lon, err := geoPoint(body)
-	if err != nil {
-		return "", "", err
+	hits := placeHits(body)
+	if len(hits) == 0 {
+		return "", "", fmt.Errorf("that city was not found")
 	}
+	lat, lon := hits[0].Lat, hits[0].Lon
 	geoMu.Lock()
 	geoCache[key] = [2]string{lat, lon}
 	geoMu.Unlock()
 	return lat, lon, nil
 }
 
-func geoPoint(body []byte) (string, string, error) {
+// PlaceHit is one city from the geocoder. Lat and Lon are the point the forecast uses.
+type PlaceHit struct {
+	Name    string `json:"name"`
+	Region  string `json:"region"`
+	Country string `json:"country"`
+	Label   string `json:"label"`
+	Lat     string `json:"lat"`
+	Lon     string `json:"lon"`
+}
+
+// SearchPlaces lists cities matching a few typed letters.
+func (a *App) SearchPlaces(query string) ([]PlaceHit, error) {
+	query = strings.TrimSpace(query)
+	if len([]rune(query)) < 2 {
+		return []PlaceHit{}, nil
+	}
+	raw := "https://geocoding-api.open-meteo.com/v1/search?count=8&language=en&format=json&name=" + url.QueryEscape(query)
+	body, err := fetchHTTPS(FetchRequest{URL: raw})
+	if err != nil {
+		return nil, err
+	}
+	hits := placeHits(body)
+	if hits == nil {
+		hits = []PlaceHit{}
+	}
+	return hits, nil
+}
+
+func placeHits(body []byte) []PlaceHit {
 	var doc struct {
 		Results []struct {
+			Name      string  `json:"name"`
+			Admin1    string  `json:"admin1"`
+			Country   string  `json:"country"`
 			Latitude  float64 `json:"latitude"`
 			Longitude float64 `json:"longitude"`
 		} `json:"results"`
 	}
-	if err := json.Unmarshal(body, &doc); err != nil || len(doc.Results) == 0 {
-		return "", "", fmt.Errorf("that city was not found")
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil
 	}
-	return strconv.FormatFloat(doc.Results[0].Latitude, 'f', 4, 64), strconv.FormatFloat(doc.Results[0].Longitude, 'f', 4, 64), nil
+	out := make([]PlaceHit, 0, len(doc.Results))
+	for _, result := range doc.Results {
+		if result.Name == "" {
+			continue
+		}
+		label := result.Name
+		if result.Admin1 != "" && result.Admin1 != result.Name {
+			label += ", " + result.Admin1
+		}
+		if result.Country != "" {
+			label += ", " + result.Country
+		}
+		out = append(out, PlaceHit{
+			Name:    result.Name,
+			Region:  result.Admin1,
+			Country: result.Country,
+			Label:   label,
+			Lat:     strconv.FormatFloat(result.Latitude, 'f', 4, 64),
+			Lon:     strconv.FormatFloat(result.Longitude, 'f', 4, 64),
+		})
+	}
+	return out
 }
 
 func weatherFields(body []byte, now time.Time) (map[string]string, error) {

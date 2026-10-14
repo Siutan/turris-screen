@@ -482,6 +482,24 @@
 
 .src-file { display: flex; gap: 6px; }
 
+.src-suggest {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--field);
+}
+
+.src-suggest button {
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.src-suggest button:hover { background: var(--chip); }
+
 .src-interval {
   display: flex;
   align-items: center;

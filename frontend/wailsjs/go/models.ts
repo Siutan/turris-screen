@@ -320,6 +320,28 @@ export namespace main {
 	}
 	
 	
+	export class PlaceHit {
+	    name: string;
+	    region: string;
+	    country: string;
+	    label: string;
+	    lat: string;
+	    lon: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlaceHit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.region = source["region"];
+	        this.country = source["country"];
+	        this.label = source["label"];
+	        this.lat = source["lat"];
+	        this.lon = source["lon"];
+	    }
+	}
 	export class SourceQuery {
 	    id: string;
 	    kind: string;

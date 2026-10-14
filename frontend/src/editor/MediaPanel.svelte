@@ -1,5 +1,5 @@
 <script>
-  import { GetSourceSecret, PickSourceFile, PickSourceProgram, SetSourceSecret } from '../../wailsjs/go/main/App.js'
+  import { GetSourceSecret, PickSourceFile, PickSourceProgram, SearchPlaces, SetSourceSecret } from '../../wailsjs/go/main/App.js'
   import { EFFECT_PACKS, SOURCE_KINDS, TEXT_PRESETS, hasMotion, widgetText } from '../lib/project.js'
   import { isDeviceLabel } from '../lib/labels.js'
   import { MOTION_MIN_MS, ageLabel } from '../lib/live.js'
@@ -112,6 +112,10 @@
   ]
   let secrets = $state({})
   let secretLoads = new Set()
+  let placeDraft = $state({})
+  let placeHits = $state({})
+  let placeOpen = $state(null)
+  let placeTimer = {}
 
   function desktop() {
     return typeof window !== 'undefined' && window.go?.main?.App
@@ -180,6 +184,69 @@
     const minutes = Math.max(1, Number(source.config.minutes) || 25)
     const end = running ? new Date(Date.now() + minutes * 60000).toISOString() : source.config.end
     act(() => studio.updateSource(source.id, { config: { minutes, running, end } }))
+  }
+
+  function placeValue(source) {
+    return placeDraft[source.id] ?? source.config.place ?? ''
+  }
+
+  function onPlaceInput(source, value) {
+    placeDraft = { ...placeDraft, [source.id]: value }
+    placeOpen = source.id
+    clearTimeout(placeTimer[source.id])
+    placeTimer[source.id] = setTimeout(() => searchPlace(source.id, value), 250)
+  }
+
+  async function searchPlace(id, value) {
+    const query = value.trim()
+    if (query.length < 2 || !desktop() || placeOpen !== id) {
+      placeHits = { ...placeHits, [id]: [] }
+      return
+    }
+    try {
+      const hits = await SearchPlaces(query)
+      if ((placeDraft[id] ?? '').trim() !== query || placeOpen !== id) return
+      placeHits = { ...placeHits, [id]: hits || [] }
+    } catch {
+      placeHits = { ...placeHits, [id]: [] }
+    }
+  }
+
+  function pickPlace(source, hit) {
+    clearTimeout(placeTimer[source.id])
+    const next = { ...placeDraft }
+    delete next[source.id]
+    placeDraft = next
+    placeHits = { ...placeHits, [source.id]: [] }
+    placeOpen = null
+    act(() => studio.updateSource(source.id, { config: { place: hit.label, lat: hit.lat, lon: hit.lon } }))
+  }
+
+  function commitPlace(source) {
+    const draft = placeDraft[source.id]
+    if (draft == null) return
+    const typed = draft.trim()
+    const current = (source.config.place || '').trim()
+    clearTimeout(placeTimer[source.id])
+    const next = { ...placeDraft }
+    delete next[source.id]
+    placeDraft = next
+    placeHits = { ...placeHits, [source.id]: [] }
+    if (placeOpen === source.id) placeOpen = null
+    if (typed === current) return
+    act(() => studio.updateSource(source.id, { config: { place: typed, lat: '', lon: '' } }))
+  }
+
+  function onPlaceKey(source, event) {
+    if (event.key === 'Escape') {
+      placeHits = { ...placeHits, [source.id]: [] }
+      return
+    }
+    const hit = (placeHits[source.id] || [])[0]
+    if (event.key === 'Enter' && hit) {
+      event.preventDefault()
+      pickPlace(source, hit)
+    }
   }
 
   async function chooseProgram(source) {
@@ -423,7 +490,27 @@
             {/if}
           </div>
         {:else if source.kind === 'weather'}
-          <input class="src-input" value={source.config.place} placeholder="City" aria-label="City" onchange={(e) => act(() => studio.updateSource(source.id, { config: { place: e.currentTarget.value } }))} />
+          <input
+            class="src-input"
+            value={placeValue(source)}
+            placeholder="City, or leave blank for this PC"
+            aria-label="City"
+            aria-expanded={placeOpen === source.id && (placeHits[source.id] || []).length > 0}
+            autocomplete="off"
+            spellcheck="false"
+            oninput={(e) => onPlaceInput(source, e.currentTarget.value)}
+            onfocus={() => (placeOpen = source.id)}
+            onkeydown={(e) => onPlaceKey(source, e)}
+            onblur={() => commitPlace(source)}
+          />
+          {#if placeOpen === source.id && (placeHits[source.id] || []).length}
+            <div class="src-suggest" role="listbox">
+              {#each placeHits[source.id] as hit (hit.lat + hit.lon)}
+                <button type="button" role="option" onmousedown={(e) => e.preventDefault()} onclick={() => pickPlace(source, hit)}>{hit.label}</button>
+              {/each}
+            </div>
+          {/if}
+          <p class="src-path">Leave this blank to use this PC. Choose a suggestion so the right city is used.</p>
         {:else if source.kind === 'calendar' || source.kind === 'rss'}
           <input class="src-input" value={source.config.url} placeholder="https://" aria-label={source.kind === 'calendar' ? 'Calendar address' : 'Feed address'} onchange={(e) => act(() => studio.updateSource(source.id, { config: { url: e.currentTarget.value } }))} />
         {:else if source.kind === 'http' && preset === 'ha'}
