@@ -8,8 +8,8 @@ ffmpeg and ffprobe
   License: https://www.gnu.org/licenses/gpl-3.0.html
 
 yt-dlp
-  Standalone executable 2026.08.19, Unlicense
-  https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19
+  Standalone executable nightly 2026.10.10.233141, Unlicense
+  https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/tag/2026.10.10.233141
 
 qjs
   QuickJS-ng v0.17.0, MIT License

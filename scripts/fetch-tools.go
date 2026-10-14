@@ -24,8 +24,8 @@ const (
 	ffmpegSHA    = "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec"
 	ffprobeSHA   = "f0d36ecbbdd3bcfac3efa078c96c7271c2e68b3810595552ac3b7f17e9a65c52"
 
-	ytdlpURL = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe"
-	ytdlpSHA = "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"
+	ytdlpURL = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.10.10.233141/yt-dlp.exe"
+	ytdlpSHA = "e7cafc44db8aa433da8dd78303b9157f2c1dd509c4cbfcd8418081b7e1d26a7a"
 
 	qjsURL = "https://github.com/quickjs-ng/quickjs/releases/download/v0.17.0/qjs-windows-x86_64.exe"
 	qjsSHA = "2aeabf0092c3262d6b2609824418f7dd7ed1f1df939f73b2b15645230cac0d77"
@@ -97,7 +97,7 @@ func fetch(root string) error {
 		}
 	}
 	if !current(bundle, "yt-dlp.exe", ytdlpSHA) {
-		fmt.Println("downloading yt-dlp 2026.08.19")
+		fmt.Println("downloading yt-dlp nightly 2026.10.10.233141")
 		b, err := download(ytdlpURL, ytdlpSHA)
 		if err != nil {
 			return err

@@ -23,7 +23,10 @@ import (
 )
 
 const (
-	ytdlpRelease = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+	// Nightly builds pick up YouTube player-client fixes between stable releases.
+	// Stable 2026.08.19 still downloads from the visionos client, and YouTube
+	// answers 403 partway through those files.
+	ytdlpRelease = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe"
 	// ytdlpRefresh is how stale the app's own yt-dlp may get. YouTube changes often
 	// enough that old releases stop working.
 	ytdlpRefresh = 7 * 24 * time.Hour
@@ -177,18 +180,27 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// refreshYtdlp asks the app's own yt-dlp to update itself about once a week.
-// Failures are ignored; an older yt-dlp often still works.
+// refreshYtdlp follows yt-dlp's nightly channel about once a week.
+// The check is a sidecar file: unpacking the bundled program sets the exe's
+// own time to now, which would otherwise postpone an update of a stale build.
+// Failures are ignored; the copy already on disk is used.
 func refreshYtdlp(ctx context.Context, path string) {
-	st, err := os.Stat(path)
-	if err != nil || time.Since(st.ModTime()) < ytdlpRefresh {
+	if !ytdlpDue(path, time.Now()) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	_ = ytdlpCommand(ctx, path, "--update").Run()
-	now := time.Now()
-	_ = os.Chtimes(path, now, now)
+	_ = ytdlpCommand(ctx, path, "--update-to", "nightly").Run()
+	_ = os.WriteFile(path+".checked", nil, 0o644)
+}
+
+// ytdlpDue reports whether the weekly nightly update should run.
+func ytdlpDue(path string, now time.Time) bool {
+	st, err := os.Stat(path + ".checked")
+	if err != nil {
+		return true
+	}
+	return now.Sub(st.ModTime()) >= ytdlpRefresh
 }
 
 // ytdlpCommand runs yt-dlp hidden. yt-dlp.exe starts a copy of itself, which starts

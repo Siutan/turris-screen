@@ -100,6 +100,28 @@ func TestScanLinesOrCR(t *testing.T) {
 	}
 }
 
+func TestYtdlpDue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "yt-dlp.exe")
+	now := time.Now()
+	if !ytdlpDue(path, now) {
+		t.Fatal("missing check should update")
+	}
+	if err := os.WriteFile(path+".checked", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ytdlpDue(path, now.Add(time.Minute)) {
+		t.Fatal("a fresh check should wait")
+	}
+	old := now.Add(-8 * 24 * time.Hour)
+	if err := os.Chtimes(path+".checked", old, old); err != nil {
+		t.Fatal(err)
+	}
+	if !ytdlpDue(path, now) {
+		t.Fatal("a week-old check should update")
+	}
+}
+
 func TestCleanTitle(t *testing.T) {
 	if got := cleanTitle("  Me   at\nthe zoo "); got != "Me at the zoo" {
 		t.Errorf("got %q", got)
