@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resolveText } from './template.js'
+import { resolveText, sourcePreview } from './template.js'
 
 test('known fields replace and unknown tokens remain', () => {
   const sources = [{ id: 'sys', name: 'System', kind: 'system', config: {} }]
@@ -34,6 +34,14 @@ test('a running focus timer counts down in seconds', () => {
   const sources = [{ id: 'f', name: 'Focus', kind: 'focus', config: { running: true, end } }]
   const now = new Date(2026, 9, 9, 21, 46, 0)
   assert.equal(resolveText('{{f.remaining}}', sources, {}, now), '0:30')
+})
+
+test('a live card shows the sampled value, with a unit for cpu', () => {
+  const source = { id: 'sys', kind: 'system', config: {} }
+  const now = new Date(2026, 9, 9, 21, 41)
+  assert.equal(sourcePreview(source, { sys: { fields: { cpu: '42' } } }, now), '42%')
+  assert.equal(sourcePreview({ id: 'lon', kind: 'zone', config: { zone: 'Europe/London' } }, {}, new Date(Date.UTC(2026, 9, 9, 10, 41))), '11:41')
+  assert.equal(sourcePreview(source, {}, now), '')
 })
 
 test('countdown remaining is computed from the stored target', () => {

@@ -16,6 +16,7 @@ import {
   widgetClip,
   newSource,
   clampInterval,
+  liveItemId,
 } from './project.js'
 
 const HISTORY = 120
@@ -36,6 +37,9 @@ export class Studio {
   pps = $state(60)
   // fitKey changes whenever a project is opened, so the timeline can fit itself once.
   fitKey = $state(0)
+  // liveItem is the widget catalog entry whose copies are edited on the right.
+  liveItem = $state(null)
+  liveSourceId = $state(null)
 
   duration = $derived(projectDuration(this.project))
   selected = $derived(findClip(this.project, this.selection.at(-1)))
@@ -46,7 +50,13 @@ export class Studio {
   }
 
   set selectedId(id) {
+    if (id) this.#clearLive()
     this.selection = id ? [id] : []
+  }
+
+  #clearLive() {
+    this.liveItem = null
+    this.liveSourceId = null
   }
 
   #past = []
@@ -66,6 +76,7 @@ export class Studio {
     this.time = 0
     this.playing = false
     this.selectedId = null
+    this.#clearLive()
     this.dirty = false
     this.#past = []
     this.#future = []
@@ -139,18 +150,39 @@ export class Studio {
 
   // toggleSelect adds a clip to the selection, or takes it out if it is already in.
   toggleSelect(id) {
+    this.#clearLive()
     if (this.selection.includes(id)) this.selection = this.selection.filter((s) => s !== id)
     else this.selection = [...this.selection, id]
   }
 
   selectMany(ids, additive = false) {
+    this.#clearLive()
     const next = additive ? [...this.selection] : []
     for (const id of ids) if (!next.includes(id)) next.push(id)
     this.selection = next
   }
 
   selectAll() {
+    this.#clearLive()
     this.selection = this.project.tracks.flatMap((t) => t.clips.map((c) => c.id))
+  }
+
+  // openLive shows every copy of one widget kind on the right.
+  openLive(itemId) {
+    this.selection = []
+    this.liveItem = itemId
+    const matches = this.liveSources(itemId)
+    if (!matches.some((s) => s.id === this.liveSourceId)) this.liveSourceId = matches[0]?.id || null
+  }
+
+  focusSource(source) {
+    this.selection = []
+    this.liveItem = liveItemId(source)
+    this.liveSourceId = source?.id || null
+  }
+
+  liveSources(itemId) {
+    return (this.project.sources || []).filter((s) => liveItemId(s) === itemId)
   }
 
   #prune() {
@@ -364,6 +396,7 @@ export class Studio {
         rights.push(right.id)
       }
     })
+    this.#clearLive()
     this.selection = rights
     return true
   }
@@ -384,6 +417,7 @@ export class Studio {
       for (const { copy, trackIndex } of copies) p.tracks[trackIndex].clips.push(copy)
       for (const { copy } of copies) this.#settle(copy.id)
     })
+    this.#clearLive()
     this.selection = copies.map(({ copy }) => copy.id)
   }
 
@@ -418,6 +452,7 @@ export class Studio {
       keep.duration = round(end - keep.start)
       for (const track of p.tracks) track.clips = track.clips.filter((c) => !gone.has(c.id))
     })
+    this.#clearLive()
     this.selection = [keep.id]
   }
 
@@ -455,6 +490,7 @@ export class Studio {
       }
       for (const id of placed) this.#settle(id)
     })
+    this.#clearLive()
     this.selection = placed
     if (span > 0) this.time = at
     return placed.length > 0

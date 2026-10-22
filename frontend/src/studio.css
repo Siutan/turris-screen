@@ -366,6 +366,11 @@
 
 .bin-widget.active { box-shadow: inset 0 0 0 2px var(--accent); }
 
+.bin-widget.solo {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+
 .bin-widget-open {
   display: flex;
   flex-direction: column;
@@ -387,6 +392,18 @@
 .bin-widget-shot.time { font-size: 26px; letter-spacing: -0.03em; }
 
 .bin-widget-shot.date { font-size: 12px; letter-spacing: 0.2em; font-weight: 500; }
+
+.bin-widget-shot.live {
+  padding: 0 10px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-align: center;
+  overflow: hidden;
+}
+
+.bin-widget-shot.live.clock { font-size: 26px; font-weight: 300; letter-spacing: -0.03em; }
 
 .bin-widget-copy { display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px; }
 
@@ -422,7 +439,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 8px 2px 0;
+  padding: 0 2px;
 }
 
 .src-live strong { display: block; font-size: 13px; font-weight: 600; }
@@ -772,10 +789,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 10px 0;
   font-size: 14px;
   font-weight: 650;
 }
+
+.live-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--soft);
+}
+
+.live-card.on { box-shadow: inset 0 0 0 2px var(--accent); }
 
 .ins-head svg { width: 12px; height: 12px; color: var(--muted-2); transition: transform 160ms ease; }
 
@@ -798,12 +827,19 @@
 
 .src-bar {
   position: relative;
-  height: 28px;
+  height: 44px;
   border-radius: 7px;
-  background: repeating-linear-gradient(90deg, var(--media-2) 0 6px, var(--line-2) 6px 7px);
+  background-color: var(--media-2);
+  background-image: repeating-linear-gradient(90deg, var(--media-2) 0 6px, var(--line-2) 6px 7px);
+  background-size: auto, auto;
+  background-repeat: no-repeat;
+  background-position: center;
+  overflow: hidden;
   cursor: pointer;
   touch-action: none;
 }
+
+.src-bar.film { background-color: #1c1e22; background-size: 100% 100%, auto; }
 
 .src-bar.locked { cursor: default; opacity: 0.6; }
 
@@ -819,6 +855,11 @@
 }
 
 .src-bar:active .src-win { cursor: grabbing; }
+
+.src-bar.film .src-win {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 999px rgba(0, 0, 0, 0.42);
+}
 
 .src-edge {
   position: absolute;

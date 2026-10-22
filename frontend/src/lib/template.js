@@ -76,6 +76,42 @@ function localFields(source, sampled, now) {
   return null
 }
 
+function previewPick(fields, keys) {
+  for (const key of keys) {
+    const value = fields[key]
+    if (value != null && String(value).trim()) return String(value).trim()
+  }
+  return ''
+}
+
+// sourcePreview is the short sample a live card shows before its options are opened.
+export function sourcePreview(source, values = {}, now = new Date()) {
+  if (!source) return ''
+  const sampled = values?.[source.id]?.fields || {}
+  const extra = localFields(source, sampled, now) || {}
+  const fields = { ...sampled, ...extra }
+  const preset = source.config?.preset || ''
+  if (source.kind === 'system') {
+    const cpu = previewPick(fields, ['cpu'])
+    return cpu ? (cpu.endsWith('%') ? cpu : `${cpu}%`) : ''
+  }
+  if (source.kind === 'temps') {
+    const cpu = previewPick(fields, ['cpu'])
+    return cpu ? (cpu.includes('°') ? cpu : `${cpu}°`) : ''
+  }
+  if (source.kind === 'countdown' || source.kind === 'focus') return previewPick(fields, ['remaining'])
+  if (source.kind === 'zone') return previewPick(fields, ['time24', 'time12'])
+  if (source.kind === 'media') return previewPick(fields, ['title', 'artist'])
+  if (source.kind === 'weather') return previewPick(fields, ['temp', 'condition'])
+  if (source.kind === 'calendar') return previewPick(fields, ['next'])
+  if (source.kind === 'mail') return previewPick(fields, ['count'])
+  if (source.kind === 'rss') return previewPick(fields, ['headline'])
+  if (source.kind === 'file' || source.kind === 'command') return previewPick(fields, ['text'])
+  if (preset === 'price' || preset === 'ha') return previewPick(fields, ['value', 'state'])
+  if (preset === 'github') return previewPick(fields, ['summary'])
+  return previewPick(fields, ['value', 'status', 'text'])
+}
+
 export function resolveText(text, sources = [], values = {}, now = new Date()) {
   const index = new Map()
   index.set('clock', clockFields(now))

@@ -1,7 +1,7 @@
 <script>
   import { MIN_CLIP, clipEnd, fmtClock, fmtSourceTime, parseTime } from '../lib/project.js'
 
-  let { studio, clip, revision } = $props()
+  let { studio, sources, clip, revision } = $props()
 
   let bar = $state(null)
   let fromText = $state('')
@@ -18,6 +18,21 @@
 
   let pct = (s) => `${(s / range.total) * 100}%`
   let playhead = $derived(range && studio.time >= clip.start && studio.time <= clipEnd(clip) ? (clip.in || 0) + studio.time - clip.start : null)
+  let strip = $state('')
+
+  $effect(() => {
+    revision
+    if (!range || !sources) return
+    const total = range.total
+    const assetId = clip.assetId
+    let stop = false
+    sources.filmstrip(assetId, 0, total, 12).then((url) => {
+      if (!stop && url) strip = url
+    })
+    return () => {
+      stop = true
+    }
+  })
 
   $effect(() => {
     if (!range) return
@@ -113,7 +128,9 @@
   <div class="src">
     <div
       class="src-bar"
+      class:film={!!strip}
       class:locked={clip.locked}
+      style:background-image={strip ? `url(${strip})` : null}
       bind:this={bar}
       onpointerdown={down}
       role="slider"

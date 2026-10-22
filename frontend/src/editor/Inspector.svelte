@@ -1,4 +1,5 @@
 <script>
+  import LivePanel from './LivePanel.svelte'
   import SourceRange from './SourceRange.svelte'
   import { CLOCK_FIELDS, DATE_FORMATS, FILTER_LIBRARY, FONTS, SWATCHES, TIME_FORMATS, WEIGHTS, coolerFont, effectControls, effectDefaults, effectMeta, effectSettings, filterCSS, fmtBytes, isTextual, sourceFields } from '../lib/project.js'
 
@@ -149,6 +150,8 @@
         <p class="ins-note">{group.merge.reason}</p>
       {/if}
     </section>
+  {:else if studio.liveItem}
+    <LivePanel {studio} {onError} />
   {:else if !clip}
     <section class="ins-card ins-hint">
       <p><strong>Nothing selected</strong></p>
@@ -206,7 +209,7 @@
       {@render head('source', 'Video section')}
       {#if open.source}
         <div class="ins-body">
-          <SourceRange {studio} {clip} {revision} />
+          <SourceRange {studio} {sources} {clip} {revision} />
         </div>
       {/if}
     </section>

@@ -285,6 +285,37 @@ export const SOURCE_KINDS = {
   },
 }
 
+export const LIVE_ITEMS = [
+  { id: 'countdown', kind: 'countdown', label: 'Countdown', sample: '2 hr', clock: true },
+  { id: 'zone', kind: 'zone', label: 'World clock', sample: '12:41', clock: true },
+  { id: 'system', kind: 'system', label: 'System', sample: '42%', clock: true, unique: true },
+  { id: 'temps', kind: 'temps', label: 'Temperatures', sample: '61°', clock: true, unique: true },
+  { id: 'media', kind: 'media', label: 'Now playing', sample: 'Track', unique: true },
+  { id: 'weather', kind: 'weather', label: 'Weather', sample: '18°', clock: true },
+  { id: 'calendar', kind: 'calendar', label: 'Calendar', sample: 'Next' },
+  { id: 'sports', kind: 'http', preset: 'sports', label: 'Sports', sample: '2–1', extra: { name: 'Sports', intervalSec: 900 } },
+  { id: 'price', kind: 'http', preset: 'price', label: 'Price', sample: '$128', extra: { name: 'Price', intervalSec: 180 } },
+  { id: 'live', kind: 'http', preset: 'live', label: 'Live status', sample: 'Live', extra: { name: 'Live status', intervalSec: 180 } },
+  { id: 'ha', kind: 'http', preset: 'ha', label: 'Home Assistant', sample: 'On', extra: { name: 'Home Assistant', intervalSec: 60 } },
+  { id: 'github', kind: 'http', preset: 'github', label: 'GitHub', sample: '3 open', extra: { name: 'GitHub', intervalSec: 60 } },
+  { id: 'http', kind: 'http', label: 'JSON', sample: 'Value', extra: { name: 'JSON', intervalSec: 60 } },
+  { id: 'rss', kind: 'rss', label: 'RSS', sample: 'Headline' },
+  { id: 'mail', kind: 'mail', label: 'Mail', sample: '3', clock: true },
+  { id: 'command', kind: 'command', label: 'Command', sample: 'OK' },
+  { id: 'focus', kind: 'focus', label: 'Focus', sample: '25:00', clock: true },
+  { id: 'file', kind: 'file', label: 'File', sample: 'Line' },
+]
+
+export function liveItemId(source) {
+  if (!source) return ''
+  if (source.kind === 'http') return source.config?.preset || 'http'
+  return source.kind
+}
+
+export function liveItem(id) {
+  return LIVE_ITEMS.find((item) => item.id === id) || null
+}
+
 export function sourceFields(source) {
   if (source?.kind === 'http' && source.config?.preset === 'sports') {
     return [

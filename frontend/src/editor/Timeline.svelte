@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick, untrack } from 'svelte'
+  import { filmstripKey, filmstripSlots } from '../lib/filmstrip.js'
   import { MIN_CLIP, clipEnd, clipLabel, fmtSourceTime, isTextual } from '../lib/project.js'
   import { round } from '../lib/studio.svelte.js'
   import { clipMenu } from '../lib/menus.js'
@@ -9,6 +10,8 @@
   let { studio, sources, revision, clipboard, onError } = $props()
 
   let menu = $state(null)
+  let film = $state({})
+  let filmWanted = {}
   let marquee = $state(null)
   let slipping = $state(null)
   let draggingTrack = $state(null)
@@ -101,10 +104,49 @@
     return out
   })
 
-  function poster(clip) {
+  function mediaBackground(clip) {
     revision
-    return sources.get(clip.assetId)?.poster || ''
+    const entry = sources.get(clip.assetId)
+    const moving = entry?.kind === 'video' || (entry?.kind === 'gif' && entry.frames?.length > 1)
+    const shot = film[clip.id]
+    if (moving && shot?.url) return { image: `url(${shot.url})`, size: '100% 100%', repeat: 'no-repeat' }
+    const poster = entry?.poster || ''
+    if (!poster || (moving && (clip.in || 0) >= 0.25)) return { image: null, size: 'auto 100%', repeat: 'repeat-x' }
+    return { image: `url(${poster})`, size: 'auto 100%', repeat: 'repeat-x' }
   }
+
+  $effect(() => {
+    revision
+    pps
+    const jobs = []
+    for (const track of studio.project.tracks) {
+      for (const clip of track.clips) {
+        if (clip.type !== 'media') continue
+        const entry = sources.get(clip.assetId)
+        if (!entry?.duration) continue
+        const gif = entry.kind === 'gif' && entry.frames?.length > 1
+        if (entry.kind !== 'video' && !gif) continue
+        const from = clip.in || 0
+        const slots = filmstripSlots(Math.max(6, clip.duration * pps))
+        jobs.push({ id: clip.id, assetId: clip.assetId, from, to: from + clip.duration, slots })
+      }
+    }
+    let stop = false
+    const timer = setTimeout(() => {
+      for (const job of jobs) {
+        const key = filmstripKey(job.assetId, job.from, job.to, job.slots)
+        filmWanted[job.id] = key
+        sources.filmstrip(job.assetId, job.from, job.to, job.slots).then((url) => {
+          if (stop || !url || filmWanted[job.id] !== key) return
+          film[job.id] = { key, url }
+        })
+      }
+    }, 120)
+    return () => {
+      stop = true
+      clearTimeout(timer)
+    }
+  })
 
   function missing(clip) {
     revision
@@ -473,7 +515,9 @@
                 class:locked={clip.locked}
                 style:left="{clip.start * pps}px"
                 style:width="{Math.max(6, clip.duration * pps)}px"
-                style:background-image={clip.type === 'media' && poster(clip) ? `url(${poster(clip)})` : null}
+                style:background-image={clip.type === 'media' ? mediaBackground(clip).image : null}
+                style:background-size={clip.type === 'media' ? mediaBackground(clip).size : null}
+                style:background-repeat={clip.type === 'media' ? mediaBackground(clip).repeat : null}
                 title={clipTitle(clip)}
                 role="button"
                 tabindex="-1"
