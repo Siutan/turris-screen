@@ -174,6 +174,11 @@ export const SOURCE_KINDS = {
     min: 2,
     fields: [
       { id: 'cpu', label: 'CPU' },
+      { id: 'gpu', label: 'GPU' },
+      { id: 'gpuName', label: 'GPU name' },
+      { id: 'gpuMemUsed', label: 'GPU memory used' },
+      { id: 'gpuMemTotal', label: 'GPU memory total' },
+      { id: 'gpuMemPercent', label: 'GPU memory percent' },
       { id: 'ramUsed', label: 'RAM used' },
       { id: 'ramTotal', label: 'RAM total' },
       { id: 'ramPercent', label: 'RAM percent' },

@@ -79,7 +79,7 @@ func (a *App) readSystem() (map[string]string, error) {
 	if mem.total > 0 {
 		ramPercent = int(math.Round(float64(used) / float64(mem.total) * 100))
 	}
-	return map[string]string{
+	fields := map[string]string{
 		"cpu":        cpu,
 		"ramUsed":    formatBytes(float64(used)),
 		"ramTotal":   formatBytes(float64(mem.total)),
@@ -88,7 +88,11 @@ func (a *App) readSystem() (map[string]string, error) {
 		"diskTotal":  formatBytes(float64(diskTotal)),
 		"netDown":    down,
 		"netUp":      up,
-	}, nil
+	}
+	for key, value := range readGPUFields() {
+		fields[key] = value
+	}
+	return fields, nil
 }
 
 type filetime struct {
