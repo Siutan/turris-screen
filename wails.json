@@ -10,6 +10,9 @@
     "name": "",
     "email": ""
   },
+  "info": {
+    "productVersion": "0.1.0"
+  },
   "preBuildHooks": {
     "*/*": "go run ../../scripts/fetch-tools.go"
   }
